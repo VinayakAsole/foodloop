@@ -239,61 +239,31 @@ export const Home = () => {
         </div>
       )}
 
-      {/* Hero section */}
-      <div className="relative rounded-2xl overflow-hidden glass-panel border border-white/10 p-6 md:p-10 flex flex-col md:flex-row items-center gap-6">
-        <div className="space-y-4 flex-1">
-          <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-primary-500/10 border border-primary-500/30 text-primary-500 text-xs font-semibold">
-            <Sparkles size={13} />
-            <span>Zero Food Waste Mission</span>
-          </div>
-          <h1 className="text-3xl md:text-5xl font-black text-white leading-tight">
-            Delicious meals, <br />
-            <span className="bg-gradient-to-r from-primary-500 to-tertiary-500 bg-clip-text text-transparent">
-              saved nearby.
-            </span>
-          </h1>
-          <p className="text-sm text-gray-300 max-w-md">
-            Buy affordable home-cooked food and check real-time availability on the map. Convert any unsold surplus to free donation.
-          </p>
-        </div>
-
-        {/* Stats banner */}
-        <div className="grid grid-cols-2 gap-4 w-full md:w-80">
-          <div className="bg-white/5 border border-white/5 p-4 rounded-xl text-center">
-            <TrendingUp className="mx-auto text-primary-500 mb-1" size={24} />
-            <span className="text-xl font-black text-white block">154</span>
-            <span className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Meals Saved</span>
-          </div>
-          <div className="bg-white/5 border border-white/5 p-4 rounded-xl text-center">
-            <MapPin className="mx-auto text-secondary-500 mb-1" size={24} />
-            <span className="text-xl font-black text-white block">14</span>
-            <span className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Active Cooks</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Eco Impact Widget */}
-      {user && (
-        <TiltCard>
-          <EcoImpactWidget 
-            userId={user.uid} 
-            userName={user.name || user.displayName || user.username || user.email?.split('@')[0] || 'Food Saver'} 
-          />
-        </TiltCard>
-      )}
-
       {/* Discovery & Search Controls */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
         {/* Search */}
-        <div className="md:col-span-5 relative">
-          <Search className="absolute left-3.5 top-3 text-gray-500" size={18} />
+        <div className="md:col-span-5 relative flex items-center">
+          <Search className="absolute left-3.5 top-3.5 text-gray-500" size={18} />
           <input
             type="text"
             placeholder="Search by meal name or seller..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:border-primary-500 focus:bg-primary-500/5 focus:outline-none text-sm transition-all"
+            className="w-full pl-10 pr-12 py-2.5 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:border-primary-500 focus:bg-primary-500/5 focus:outline-none text-sm transition-all"
           />
+          {user && (
+            <button
+              onClick={() => {
+                const newParams = new URLSearchParams(searchParams);
+                newParams.set('showLedger', 'true');
+                setSearchParams(newParams, { replace: true });
+              }}
+              className="absolute right-2.5 p-1.5 bg-primary-500/10 hover:bg-primary-500/25 border border-primary-500/20 rounded-lg text-primary-500 hover:text-primary-400 transition cursor-pointer flex items-center justify-center animate-pulse"
+              title="View Eco-Hero Ledger"
+            >
+              <Sparkles size={15} />
+            </button>
+          )}
         </div>
 
         {/* Category selector */}

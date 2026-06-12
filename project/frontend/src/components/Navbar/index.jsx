@@ -10,7 +10,8 @@ import {
   LogOut, 
   Menu, 
   X, 
-  ChefHat 
+  ChefHat,
+  Sparkles
 } from 'lucide-react';
 
 export const Navbar = () => {
@@ -31,6 +32,7 @@ export const Navbar = () => {
     if (user.role === 'buyer') {
       navItems.push({ label: 'Browse Food', path: '/', icon: Home });
       navItems.push({ label: 'My Orders', path: '/orders', icon: ShoppingBag });
+      navItems.push({ label: 'Eco Impact', path: '/?showLedger=true', icon: Sparkles });
     } else if (user.role === 'seller') {
       navItems.push({ label: 'Seller Panel', path: '/seller-dashboard', icon: ChefHat });
     } else if (user.role === 'admin') {

@@ -1,9 +1,11 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useSearchParams } from 'react-router-dom';
 import { AuthProvider, useAuthContext } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import BottomNav from './components/BottomNav';
+import EcoImpactWidget from './components/EcoImpactWidget';
 import Home from './pages/Home';
+import { X } from 'lucide-react';
 import Auth from './pages/Auth';
 import SellerDashboard from './pages/SellerDashboard';
 import FoodDetail from './pages/FoodDetail';
@@ -49,8 +51,11 @@ const RootRoute = () => {
 };
 
 const AppContent = () => {
+  const { user } = useAuthContext();
+  const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   const isAuthPage = location.pathname === '/auth';
+  const showLedger = searchParams.get('showLedger') === 'true';
 
   return (
     <div className={`min-h-screen text-gray-100 flex flex-col relative overflow-hidden transition-colors duration-500 ${
@@ -134,6 +139,33 @@ const AppContent = () => {
         </Routes>
       </main>
       <BottomNav />
+
+      {/* Global Eco-Hero Ledger Overlay Modal */}
+      {showLedger && user && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div 
+            className="absolute inset-0 bg-slate-950/85 backdrop-blur-md" 
+            onClick={() => {
+              const newParams = new URLSearchParams(searchParams);
+              newParams.delete('showLedger');
+              setSearchParams(newParams, { replace: true });
+            }} 
+          />
+          <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-[#0b0c10]/40 backdrop-blur-xl border border-white/10 rounded-3xl p-1 shadow-2xl z-10">
+            <button
+              onClick={() => {
+                const newParams = new URLSearchParams(searchParams);
+                newParams.delete('showLedger');
+                setSearchParams(newParams, { replace: true });
+              }}
+              className="absolute top-4 right-4 p-2 bg-slate-950/50 hover:bg-slate-950 text-gray-400 hover:text-white rounded-full border border-white/10 transition z-50 cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+            <EcoImpactWidget userId={user.uid} userName={user.name || 'Food Saver'} />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

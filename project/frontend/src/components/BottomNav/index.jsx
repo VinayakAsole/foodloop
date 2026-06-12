@@ -10,7 +10,8 @@ import {
   User, 
   Bell, 
   LogOut, 
-  ChefHat 
+  ChefHat,
+  Sparkles
 } from 'lucide-react';
 
 export const BottomNav = () => {
@@ -46,6 +47,16 @@ export const BottomNav = () => {
       {/* Popover "More" Menu */}
       {showMoreMenu && (
         <div className="absolute bottom-16 right-4 w-48 bg-[#16192b]/95 backdrop-blur-md border border-white/10 rounded-2xl p-2.5 shadow-2xl flex flex-col space-y-1 z-50 animate-slide-up">
+          {user.role === 'buyer' && (
+            <Link
+              to="/?showLedger=true"
+              onClick={() => setShowMoreMenu(false)}
+              className="flex items-center space-x-2.5 px-3.5 py-2.5 rounded-xl text-xs font-bold text-amber-400 bg-amber-500/5 hover:bg-amber-500/10 border border-amber-500/10 transition"
+            >
+              <Sparkles size={15} className="text-amber-400 animate-pulse" />
+              <span>Eco-Hero Ledger</span>
+            </Link>
+          )}
           <Link
             to="/profile"
             onClick={() => setShowMoreMenu(false)}
