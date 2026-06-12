@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { 
   getSellerFoods, 
@@ -66,6 +67,7 @@ const CATEGORY_PRICES = { Breakfast: 30, Lunch: 60, Dinner: 70, Snacks: 35 };
 
 export const SellerDashboard = () => {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [foods, setFoods]             = useState([]);
   const [orders, setOrders]           = useState([]);
   const [kitchenStatus, setKitchenStatus] = useState(user?.kitchenStatus || 'ready');
@@ -230,6 +232,15 @@ export const SellerDashboard = () => {
 
   const openForm = () => { resetForm(); setShowAddForm(true); };
   const closeForm = () => { resetForm(); setShowAddForm(false); };
+
+  useEffect(() => {
+    if (searchParams.get('add') === 'true') {
+      openForm();
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('add');
+      setSearchParams(newParams, { replace: true });
+    }
+  }, [searchParams]);
 
   // ─── Image picker — resize + quick AI hint ───────────────────────────
   const handleImageChange = async (e) => {

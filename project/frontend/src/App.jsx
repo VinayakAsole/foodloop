@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuthContext } from './context/AuthContext';
 import Navbar from './components/Navbar';
+import BottomNav from './components/BottomNav';
 import Home from './pages/Home';
 import Auth from './pages/Auth';
 import SellerDashboard from './pages/SellerDashboard';
@@ -64,7 +65,7 @@ const AppContent = () => {
       <div className="absolute top-[35%] right-[20%] w-[30vw] h-[30vw] max-w-[400px] max-h-[400px] bg-tertiary-500/4 rounded-full blur-[100px] pointer-events-none z-0"></div>
 
       <Navbar />
-      <main className="flex-grow pb-12 relative z-10">
+      <main className="flex-grow pb-28 md:pb-12 relative z-10">
         <Routes>
           {/* Public/Auth Route */}
           <Route path="/auth" element={<Auth />} />
@@ -132,6 +133,7 @@ const AppContent = () => {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+      <BottomNav />
     </div>
   );
 };

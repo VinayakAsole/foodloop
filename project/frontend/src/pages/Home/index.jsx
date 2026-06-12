@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { getAvailableFoods } from '../../firebase/firestore';
 import { useAuth } from '../../hooks/useAuth';
 import FoodCard from '../../components/FoodCard';
@@ -22,6 +23,7 @@ import {
 
 export const Home = () => {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [foods, setFoods] = useState([]);
   const [filteredFoods, setFilteredFoods] = useState([]);
   
@@ -96,6 +98,20 @@ export const Home = () => {
     const clock = setInterval(() => setCurrentTime(Date.now()), 1000);
     return () => clearInterval(clock);
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get('map') === 'true') {
+      setShowMap(true);
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('map');
+      setSearchParams(newParams, { replace: true });
+    } else if (searchParams.get('map') === 'false') {
+      setShowMap(false);
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('map');
+      setSearchParams(newParams, { replace: true });
+    }
+  }, [searchParams]);
 
   // Real-time Firestore active foods listener
   useEffect(() => {
