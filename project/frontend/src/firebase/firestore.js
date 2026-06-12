@@ -386,3 +386,20 @@ export const recalculateSellerEarnings = async (sellerId) => {
   }
 };
 
+export const getGlobalCompletedPlatesCount = async () => {
+  try {
+    const querySnapshot = await getDocs(
+      query(collection(db, 'orders'), where('status', '==', 'completed'))
+    );
+    let count = 0;
+    querySnapshot.forEach((docSnap) => {
+      count += (docSnap.data().quantity || 0);
+    });
+    return count;
+  } catch (err) {
+    console.error("Failed to get global completed plates count:", err);
+    return 0;
+  }
+};
+
+

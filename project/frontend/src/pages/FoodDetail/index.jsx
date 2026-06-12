@@ -125,7 +125,8 @@ export const FoodDetail = () => {
         sellerId: food.sellerId,
         sellerName: food.sellerName,
         isDonation: food.isDonation,
-        location: food.location
+        location: food.location,
+        category: food.category || ''
       };
 
       await createOrder(orderPayload);
