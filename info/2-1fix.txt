@@ -1,0 +1,61 @@
+Project Roadmap: FoodLoopAI-Powered Community Food Marketplace & Food Waste Reduction Platform🏗️ Phase 1: Corrected System ArchitectureTo avoid data mismatches, MySQL acts as the absolute Source of Truth. Firebase is used purely for instant, reactive UI updates.                  Seller / Buyer (PWA Frontend - React.js)
+                                |
+             +------------------+------------------+
+             | (Reads Live Counters)               | (Reads/Writes Core Data)
+             v                                     v
+   Firebase Spark Tier                    Laravel REST API
+  - Realtime Database                     - Auth, Validation & JWT
+  - Cloud Messaging                       - Haversine Distance Formula
+             ^                                     |
+             | (Pushes Sync Updates)               |
+             +-------------------------------------+
+                                                   |
+                                         +---------+---------+
+                                         |                   |
+                                         v                   v
+                                    Local/Cloud MySQL   Firebase Storage
+                                   (Source of Truth)    (Images & Assets)
+📋 Phase 2: Refined Functional Requirements1. Seller (Home Cook)Register & complete profile (Awaiting Admin Verification).Post available food listings with quantity, price, expiry timestamp, and photo.Live Kitchen Status Toggle: Switch instantly between 🟢 Ready, 🟡 Cooking, or 🔴 Sold Out.Donation Toggle: Convert remaining unsold food to free donation with 1 click when expiry approaches.Verify order pickups by entering a secure Buyer OTP.2. Buyer (Student / Local Resident)Browse nearby available meals sorted strictly by distance (calculated via the Haversine Formula).View instant, non-refreshing Live Food Counters (e.g., "3 plates left").Place orders and receive a secure Pickup OTP.Scan or upload a meal image to identify the item automatically (TensorFlow.js).3. Admin (Platform Quality Control)Review, verify, or suspend Seller accounts.Monitor global platform statistics (Total meals saved, total donations processed).🗄️ Phase 3: Patched Database Schema (MySQL)These schemas contain the newly added fields required for verification, security, and the donation tracking logic.1. users TableSQLCREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    mobile VARCHAR(15) NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    role ENUM('buyer', 'seller', 'admin') DEFAULT 'buyer',
+    status ENUM('pending', 'verified', 'suspended') DEFAULT 'pending', -- FIX: Added for Admin verification
+    latitude DECIMAL(10, 8) NOT NULL,
+    longitude DECIMAL(11, 8) NOT NULL,
+    profile_photo VARCHAR(255) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+2. foods TableSQLCREATE TABLE foods (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    seller_id INT NOT NULL,
+    food_name VARCHAR(255) NOT NULL,
+    category VARCHAR(100) NOT NULL,
+    description TEXT NULL,
+    price DECIMAL(8, 2) DEFAULT 0.00,
+    quantity INT NOT NULL,
+    remaining_quantity INT NOT NULL,
+    expiry_time TIMESTAMP NOT NULL,
+    image_url VARCHAR(255) NULL,
+    status ENUM('available', 'sold_out', 'expired') DEFAULT 'available',
+    is_donation BOOLEAN DEFAULT FALSE, -- FIX: Added for social impact tracking
+    FOREIGN KEY (seller_id) REFERENCES users(id) ON DELETE CASCADE
+);
+3. orders TableSQLCREATE TABLE orders (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    buyer_id INT NOT NULL,
+    seller_id INT NOT NULL,
+    food_id INT NOT NULL,
+    quantity INT NOT NULL,
+    total_price DECIMAL(8, 2) NOT NULL,
+    payment_status ENUM('pending', 'completed') DEFAULT 'pending',
+    order_status ENUM('placed', 'ready_for_pickup', 'completed', 'cancelled') DEFAULT 'placed',
+    otp_code VARCHAR(6) NOT NULL, -- FIX: Secure 6-digit verification code for secure handoff
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (buyer_id) REFERENCES users(id),
+    FOREIGN KEY (seller_id) REFERENCES users(id),
+    FOREIGN KEY (food_id) REFERENCES foods(id)
+);
+🤖 Phase 4: Simplified AI Features (Viva-Proof)Instead of complex backend data science models that require immense computational resources, use client-side or rule-based AI logic:AI Food Recognition (Client-Side ML): Train a custom model using Google’s free Teachable Machine. Export it as a lightweight model.json bundle and load it directly inside your React app using @tensorflow/tfjs. This runs completely free on the user's browser engine.Smart Price Suggestion: When a seller types in an item name (e.g., "Poha"), Laravel runs a fast aggregate query checking the average price of that category within a 5km radius and suggests the optimal rate.Data-Driven Demand Analytics: Instead of deep learning predictions, use native SQL grouping on your orders table. Display a lightweight analytics card to the seller: "75% of breakfast items in your area sell out between 8:00 AM and 10:30 AM. Consider adjusting your cooking schedule." This provides practical value while remaining straightforward to implement.🛠️ Phase 5: Complete 100% Free Tool StackCategoryTool / ServicePurposeCost PlanDevelopment EnvironmentVS Code, XAMPP / LaragonCode editing and running local Apache/MySQL environments.Free / Open SourceFrontend FrameworkReact.js & Tailwind CSSInteractive Single Page Application (SPA) designed as an installable PWA.Free / Open SourceBackend APILaravel (PHP)Handles all secure transactions, routing logic, validation, and JWT authentication.Free / Open SourceReal-Time LayerFirebase Realtime DBSyncs immediate inventory numbers to all active user viewports.Free (Spark Tier)Cloud File StorageFirebase StorageHolds user profile icons and uploaded menu pictures.Free (Up to 5GB)Mapping EngineLeaflet.js & OpenStreetMapEmbeds maps, sets coordinate pins, and charts distances without API keys.Free / Open SourceHosting (Frontend)Vercel or NetlifyDeploys your React client production build directly out of GitHub.Free TierHosting (Backend & DB)Render or RailwayHosts your public-facing Laravel server and production MySQL workspace.Free Tier📅 Phase 6: Core Implementation TimelineSprint 1: Local Foundation & Core Database (Weeks 1-2)Set up local development workspace using XAMPP/Laragon and initialize your Git repository.Migrate all corrected MySQL tables into the database.Build basic Laravel authentication REST APIs using JWT tokens.Sprint 2: Core User Interfaces & Location Logic (Weeks 3-4)Construct the core React interface styled cleanly with Tailwind CSS.Integrate Leaflet.js with OpenStreetMap to read the browser’s navigator.geolocation coordinate points.Write the backend Haversine Formula queries so buyers can filter food listings starting from the nearest kitchen outward.Sprint 3: The Real-Time Engine Integration (Weeks 5-6)Connect the React frontend with the Firebase SDK.Create a Laravel Event Hook: Every time an order status updates or a item sells out in MySQL, trigger a cURL request pushing the latest remaining quantity to Firebase.Verify that changing values inside your database instantly reflects across separate browser windows without page refreshes.Sprint 4: AI Ingestion & Production Deployment (Weeks 7-8)Train your food classification model on Google Teachable Machine, export the JSON payload, and load it using @tensorflow/tfjs inside the client application.Write the Service Worker configurations (manifest.json) to handle offline caching, unlocking PWA installability on Android and iOS devices.Deploy the Laravel code to Render and your React interface to Vercel. Run a complete system verification walkthrough.

@@ -1,0 +1,28 @@
+# Dependency directories
+node_modules/
+project/frontend/node_modules/
+
+# Build outputs
+dist/
+project/frontend/dist/
+
+# Local env files
+.env
+.env.local
+.env.*.local
+project/frontend/.env
+project/frontend/.env.local
+project/frontend/.env.*
+
+# Editor/Workspace directories
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS metadata
+.DS_Store
+Thumbs.db

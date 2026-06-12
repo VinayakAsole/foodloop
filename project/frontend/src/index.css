@@ -1,0 +1,302 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+@theme {
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-display: 'Sora', 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Custom Stitch Palette */
+  --color-primary-50: #fff8f5;
+  --color-primary-100: #ffeadd;
+  --color-primary-500: #FF6B35;
+  --color-primary-600: #e0521d;
+  --color-primary-700: #be3d13;
+  
+  --color-secondary-500: #2EC4B6;
+  --color-secondary-600: #20a89c;
+  
+  --color-tertiary-500: #FFBF69;
+  --color-tertiary-600: #e09f4a;
+
+  --color-dark-bg: #0b0c10;
+  --color-dark-card: rgba(17, 18, 27, 0.75);
+  --color-dark-border: rgba(255, 255, 255, 0.08);
+  
+  --radius-lg: 12px; /* ROUND_TWELVE */
+}
+
+/* Base resets & layout settings */
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100vh;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: #0b0c10;
+  color: #f3f4f6;
+  scroll-behavior: smooth;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #090a0f;
+}
+::-webkit-scrollbar-thumb {
+  background: #1f2937;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #374151;
+}
+
+/* Glassmorphism card utility from Design system */
+.glass-panel {
+  background: rgba(15, 17, 28, 0.45);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 
+    inset 1px 1px 0 rgba(255, 255, 255, 0.12), 
+    inset -1px -1px 0 rgba(0, 0, 0, 0.2), 
+    0 8px 32px 0 rgba(0, 0, 0, 0.4);
+  border-radius: 12px;
+}
+
+.glass-panel:hover {
+  border-color: rgba(255, 107, 53, 0.25); /* Subtle glow with primary orange on hover */
+  box-shadow: 
+    inset 1px 1px 0 rgba(255, 255, 255, 0.18), 
+    inset -1px -1px 0 rgba(0, 0, 0, 0.2), 
+    0 12px 30px -5px rgba(0, 0, 0, 0.6), 
+    0 0 20px 2px rgba(255, 107, 53, 0.1);
+}
+
+.glass-panel-light {
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  box-shadow: 
+    inset 1px 1px 0 rgba(255, 255, 255, 0.06), 
+    inset -1px -1px 0 rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+}
+
+/* Donation Highlight Card styling */
+.donation-card {
+  border: 1px solid rgba(255, 191, 105, 0.2) !important;
+  background: linear-gradient(135deg, rgba(17, 18, 27, 0.85) 0%, rgba(255, 191, 105, 0.03) 100%) !important;
+  box-shadow: 0 4px 20px -2px rgba(255, 191, 105, 0.05) !important;
+}
+
+.donation-card:hover {
+  border-color: rgba(255, 191, 105, 0.45) !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 0 20px 2px rgba(255, 191, 105, 0.1) !important;
+}
+
+/* Leaflet maps styling resets */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  background: #11121b !important;
+  border-radius: 12px;
+}
+
+.leaflet-bar {
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: none !important;
+}
+
+.leaflet-bar a {
+  background-color: #11121b !important;
+  color: #f3f4f6 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.leaflet-bar a:hover {
+  background-color: #1f2937 !important;
+  color: #FF6B35 !important; /* Primary Orange accent */
+}
+
+.leaflet-popup-content-wrapper, .leaflet-popup-tip {
+  background: #11121b !important;
+  color: #f3f4f6 !important;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5) !important;
+  border-radius: 8px !important;
+}
+
+.leaflet-popup-close-button {
+  color: #9ca3af !important;
+}
+
+/* Real-time Counter Pulse Glow */
+@keyframes counter-glow {
+  0%, 100% {
+    box-shadow: 0 0 5px 0px rgba(46, 196, 182, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 15px 3px rgba(46, 196, 182, 0.4);
+  }
+}
+
+.live-counter-badge {
+  animation: counter-glow 2s infinite ease-in-out;
+}
+
+/* Micro-animations */
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.33);
+  }
+  80%, 100% {
+    opacity: 0;
+  }
+}
+
+.live-indicator {
+  position: relative;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #2EC4B6; /* Secondary Teal for live status */
+}
+
+.live-indicator::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background-color: #2EC4B6;
+  animation: pulse-ring 1.2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+/* Monospace OTP Digits styling */
+.otp-display-box {
+  font-family: var(--font-mono);
+  font-size: 44px;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 107, 53, 0.2);
+}
+
+/* Specialized Dribbble Glassmorphism Login elements */
+.bg-moody {
+  background-image: url(https://lh3.googleusercontent.com/aida-public/AB6AXuAS0OBA2X27svtbXax8MPpri8yqYvqSv-SNBLFfTWvr8X_pj9HLQD06lUae1ScL3vZq9W4Pfw6J6i0Y-aAESQv91fLCopvx1UnaWdAxX_aF9Fh7D19vzE22bUz1wwNULXPAANcxmybhuR6VMKNkk4sZQph2JbmdgkU4LE_5Z6FmpP6g7lAk7MoUPkJVrVy8qnFccKoY83Z4-_-a-_3erFLxahM8-y9_v91Vg6GzOJaBWSNlQcaIyEFLXhhAzkX_DLkkXJ2AYp5CNMFX);
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+}
+
+.bg-overlay {
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.85));
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 
+    inset 1px 1px 0 rgba(255, 255, 255, 0.1), 
+    inset -1px -1px 0 rgba(0, 0, 0, 0.2), 
+    0 24px 64px 0 rgba(0, 0, 0, 0.7);
+}
+
+.glass-input-pill {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: white;
+  transition: all 0.2s ease-in-out;
+}
+
+.glass-input-pill:focus-within {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.05);
+  outline: none;
+}
+
+.glass-toggle-container {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(8px);
+}
+
+/* Futuristic Glowing Styles */
+@keyframes neon-glow-primary-pulse {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(255, 107, 53, 0.15), 0 0 20px rgba(255, 107, 53, 0.05);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(255, 107, 53, 0.45), 0 0 40px rgba(255, 107, 53, 0.15);
+  }
+}
+
+@keyframes neon-glow-secondary-pulse {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(46, 196, 182, 0.15), 0 0 20px rgba(46, 196, 182, 0.05);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(46, 196, 182, 0.45), 0 0 40px rgba(46, 196, 182, 0.15);
+  }
+}
+
+.neon-glow-primary {
+  animation: neon-glow-primary-pulse 2s infinite ease-in-out;
+}
+
+.neon-glow-secondary {
+  animation: neon-glow-secondary-pulse 2s infinite ease-in-out;
+}
+
+/* Neon Moving Border light effect */
+.neon-border-pulse {
+  position: relative;
+  z-index: 10;
+  overflow: hidden;
+}
+
+.neon-border-pulse::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: conic-gradient(
+    transparent, 
+    rgba(255, 107, 53, 0.3), 
+    transparent 30%, 
+    transparent 50%, 
+    rgba(46, 196, 182, 0.3), 
+    transparent 80%
+  );
+  animation: rotate-border 6s linear infinite;
+  pointer-events: none;
+  z-index: -1;
+}
+
+@keyframes rotate-border {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+

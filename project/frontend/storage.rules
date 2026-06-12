@@ -1,0 +1,28 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper function to check if user is authenticated
+    function isAuth() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check if file size is under 5MB and is an image
+    function isValidImage() {
+      return request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // Rules for profile pictures
+    match /profiles/{userId}/{filename} {
+      allow read: if true; // Publicly viewable profiles
+      allow write: if isAuth() && (request.auth.uid == userId) && isValidImage();
+    }
+
+    // Rules for food listings photos
+    match /foods/{filename} {
+      allow read: if true; // Publicly viewable food cards
+      allow write: if isAuth() && isValidImage();
+    }
+  }
+}
