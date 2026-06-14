@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useGeolocation } from '../../hooks/useGeolocation';
 import { uploadImage } from '../../firebase/storage';
+import Logo from '../../components/Logo';
 import { 
   Lock, 
   Mail, 
@@ -20,7 +21,7 @@ import {
 
 export const Auth = () => {
   const navigate = useNavigate();
-  const { login, register, sendOtpToPhone, resetPassword } = useAuth();
+  const { login, loginWithGoogle, register, sendOtpToPhone, resetPassword } = useAuth();
   const { coords, loading: geoLoading, getCoordinates, error: geoError } = useGeolocation();
 
   const [isLogin, setIsLogin] = useState(true);
@@ -198,6 +199,28 @@ export const Auth = () => {
     }
   };
 
+  const handleGoogleLogin = async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      const profile = await loginWithGoogle();
+      if (profile.role === 'seller') {
+        navigate('/seller-dashboard', { replace: true });
+      } else if (profile.role === 'admin') {
+        navigate('/admin', { replace: true });
+      } else {
+        navigate('/', { replace: true });
+      }
+    } catch (err) {
+      console.error("Google Login Error:", err);
+      if (err.code !== 'auth/popup-closed-by-user') {
+        setError(err.message || "Failed to sign in with Google.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen w-full flex items-center justify-center relative py-12 px-4 bg-moody">
       {/* Darkening Overlay */}
@@ -207,10 +230,8 @@ export const Auth = () => {
       <div className="w-full max-w-[420px] mx-4 relative z-10 flex flex-col items-center">
         
         {/* Logo/Icon Block */}
-        <div className="mb-6 flex justify-center">
-          <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-lg shadow-black/15">
-            <ChefHat className="w-7 h-7 text-black" />
-          </div>
+        <div className="mb-6 flex justify-center scale-110">
+          <Logo iconSize="w-10 h-10" textSize="text-2xl" showAi={false} />
         </div>
 
         {/* Header Typography */}
@@ -274,8 +295,9 @@ export const Auth = () => {
                   <div className="w-full mb-4">
                     <button 
                       type="button"
-                      onClick={() => alert("Google Login is disabled. Please sign in with email or mobile OTP.")}
-                      className="w-full glass-input-pill hover:bg-white/10 transition-colors py-3.5 rounded-full flex items-center justify-center gap-3 text-sm font-semibold cursor-pointer"
+                      onClick={handleGoogleLogin}
+                      disabled={loading}
+                      className="w-full glass-input-pill hover:bg-white/10 transition-colors py-3.5 rounded-full flex items-center justify-center gap-3 text-sm font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <img 
                         alt="Google logo" 

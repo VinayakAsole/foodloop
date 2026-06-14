@@ -8,7 +8,8 @@ import {
   signOutUser,
   resetUserPassword,
   setupRecaptcha,
-  sendOtpToPhone 
+  sendOtpToPhone,
+  signInWithGoogle
 } from '../firebase/auth';
 
 const AuthContext = createContext(null);
@@ -41,6 +42,20 @@ export const AuthProvider = ({ children }) => {
     setLoading(true);
     try {
       const profileData = await signInUser(email, password);
+      setUser(profileData);
+      return profileData;
+    } catch (e) {
+      setLoading(false);
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loginWithGoogle = async () => {
+    setLoading(true);
+    try {
+      const profileData = await signInWithGoogle();
       setUser(profileData);
       return profileData;
     } catch (e) {
@@ -126,6 +141,7 @@ export const AuthProvider = ({ children }) => {
     user,
     loading,
     login,
+    loginWithGoogle,
     register,
     loginWithPhone,
     sendOtpToPhone,

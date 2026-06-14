@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import Logo from '../Logo';
 import { 
   Home, 
   ShoppingBag, 
@@ -46,13 +47,8 @@ export const Navbar = () => {
     <nav className="sticky top-0 z-50 glass-panel border-b border-white/10 px-4 py-3 md:px-8">
       <div className="max-w-7xl mx-auto flex items-center justify-between">
         {/* Logo */}
-        <Link to={user?.role === 'seller' ? '/seller-dashboard' : '/'} className="flex items-center space-x-2">
-          <div className="bg-gradient-to-tr from-primary-500 to-primary-700 p-2 rounded-xl text-slate-950 font-bold shadow-md shadow-primary-500/20">
-            <ChefHat size={22} className="text-white animate-pulse" />
-          </div>
-          <span className="text-xl font-extrabold tracking-tight bg-gradient-to-r from-primary-500 to-primary-100 bg-clip-text text-transparent">
-            FoodLoop<span className="text-white text-xs font-semibold ml-1 px-1.5 py-0.5 bg-primary-500/10 rounded-full border border-primary-500/20">AI</span>
-          </span>
+        <Link to={user?.role === 'seller' ? '/seller-dashboard' : '/'} className="flex items-center space-x-2 hover:opacity-95 transition-opacity">
+          <Logo showAi={true} iconSize="w-9 h-9" textSize="text-xl" />
         </Link>
 
         {/* Desktop Navigation */}

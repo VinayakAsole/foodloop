@@ -5,7 +5,9 @@ import {
   updateProfile,
   sendPasswordResetEmail,
   signInWithPhoneNumber,
-  RecaptchaVerifier
+  RecaptchaVerifier,
+  GoogleAuthProvider,
+  signInWithPopup
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from './config';
@@ -280,4 +282,46 @@ export const sendOtpToPhone = async (phoneNumber, appVerifier) => {
       return { user: profile };
     }
   };
+};
+
+/**
+ * Sign in user using Google Provider
+ */
+export const signInWithGoogle = async () => {
+  const provider = new GoogleAuthProvider();
+  const userCredential = await signInWithPopup(auth, provider);
+  const user = userCredential.user;
+  
+  // Check if user document exists in Firestore
+  let profile = await getUserProfile(user.uid);
+  if (!profile) {
+    profile = {
+      uid: user.uid,
+      name: user.displayName || 'Google User',
+      username: user.email ? user.email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '') : 'user_' + user.uid.substring(0, 5),
+      email: user.email || '',
+      mobile: user.phoneNumber || '',
+      role: 'buyer', // Default role for new Google sign-ups
+      status: 'verified',
+      latitude: 19.0760, // Default coordinates
+      longitude: 72.8777,
+      profilePhoto: user.photoURL || null,
+      createdAt: new Date().toISOString()
+    };
+    await setDoc(doc(db, 'users', user.uid), profile);
+    await setDoc(doc(db, 'buyers', user.uid), {
+      uid: profile.uid,
+      name: profile.name,
+      username: profile.username,
+      email: profile.email,
+      mobile: profile.mobile,
+      role: profile.role,
+      status: profile.status,
+      latitude: profile.latitude,
+      longitude: profile.longitude,
+      profilePhoto: profile.profilePhoto,
+      createdAt: profile.createdAt
+    });
+  }
+  return profile;
 };
