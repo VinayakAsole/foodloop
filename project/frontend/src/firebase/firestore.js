@@ -7,7 +7,10 @@ import {
   getDocs, 
   query, 
   where, 
-  runTransaction 
+  runTransaction,
+  deleteDoc,
+  orderBy,
+  limit
 } from 'firebase/firestore';
 import { db } from './config';
 import { calculateTrustScore } from '../utils/trustScore';
@@ -402,4 +405,222 @@ export const getGlobalCompletedPlatesCount = async () => {
   }
 };
 
+// ==========================================
+// FAVORITES / WISHLIST QUERIES
+// ==========================================
 
+export const getUserFavorites = async (userId) => {
+  try {
+    const querySnapshot = await getDocs(
+      query(collection(db, 'favorites'), where('userId', '==', userId))
+    );
+    const list = [];
+    querySnapshot.forEach((docSnap) => {
+      list.push({ id: docSnap.id, ...docSnap.data() });
+    });
+    return list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  } catch (err) {
+    console.error("Failed to get user favorites:", err);
+    return [];
+  }
+};
+
+export const addToFavorites = async (userId, foodData) => {
+  const favoriteData = {
+    userId,
+    foodId: foodData.id || foodData.foodId,
+    foodName: foodData.foodName,
+    description: foodData.description || '',
+    price: foodData.price || 0,
+    isDonation: foodData.isDonation || false,
+    imageUrl: foodData.imageUrl || '',
+    category: foodData.category || '',
+    sellerId: foodData.sellerId,
+    sellerName: foodData.sellerName,
+    sellerTrustScore: foodData.sellerTrustScore || 90,
+    location: foodData.location || null,
+    expiryTime: foodData.expiryTime || null,
+    remainingQuantity: foodData.remainingQuantity || 0,
+    createdAt: new Date().toISOString()
+  };
+  const docRef = await addDoc(collection(db, 'favorites'), favoriteData);
+  return { id: docRef.id, ...favoriteData };
+};
+
+export const removeFromFavorites = async (userId, favoriteId) => {
+  // If favoriteId is actually a foodId, look up the favorite doc first
+  const favRef = doc(db, 'favorites', favoriteId);
+  const favDoc = await getDoc(favRef);
+  
+  if (favDoc.exists() && favDoc.data().userId === userId) {
+    const { deleteDoc: firestoreDeleteDoc } = await import('firebase/firestore');
+    await firestoreDeleteDoc(favRef);
+    return;
+  }
+
+  // Fallback: find by foodId
+  const querySnapshot = await getDocs(
+    query(
+      collection(db, 'favorites'),
+      where('userId', '==', userId),
+      where('foodId', '==', favoriteId)
+    )
+  );
+  
+  if (!querySnapshot.empty) {
+    const { deleteDoc: firestoreDeleteDoc } = await import('firebase/firestore');
+    const docToDelete = querySnapshot.docs[0];
+    await firestoreDeleteDoc(doc(db, 'favorites', docToDelete.id));
+  }
+};
+
+export const isItemFavorited = async (userId, foodId) => {
+  try {
+    const querySnapshot = await getDocs(
+      query(
+        collection(db, 'favorites'),
+        where('userId', '==', userId),
+        where('foodId', '==', foodId)
+      )
+    );
+    return !querySnapshot.empty;
+  } catch (err) {
+    console.error("Failed to check favorite status:", err);
+    return false;
+  }
+};
+
+// ==========================================
+// SELLER REVIEWS QUERIES
+// ==========================================
+
+export const getSellerReviews = async (sellerId) => {
+  try {
+    const querySnapshot = await getDocs(
+      query(collection(db, 'reviews'), where('sellerId', '==', sellerId))
+    );
+    const list = [];
+    querySnapshot.forEach((docSnap) => {
+      list.push({ id: docSnap.id, ...docSnap.data() });
+    });
+    return list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  } catch (err) {
+    console.error("Failed to get seller reviews:", err);
+    return [];
+  }
+};
+
+// ==========================================
+// SELLER ANNOUNCEMENTS
+// ==========================================
+
+export const createAnnouncement = async (sellerId, message) => {
+  const docRef = await addDoc(collection(db, 'announcements'), {
+    sellerId,
+    message,
+    createdAt: new Date().toISOString()
+  });
+  return { id: docRef.id, sellerId, message, createdAt: new Date().toISOString() };
+};
+
+export const getSellerAnnouncements = async (sellerId) => {
+  const querySnapshot = await getDocs(
+    query(collection(db, 'announcements'), where('sellerId', '==', sellerId))
+  );
+  const list = [];
+  querySnapshot.forEach((docSnap) => {
+    list.push({ id: docSnap.id, ...docSnap.data() });
+  });
+  return list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+};
+
+export const deleteAnnouncement = async (announcementId) => {
+  const { deleteDoc: firestoreDeleteDoc } = await import('firebase/firestore');
+  const announcementRef = doc(db, 'announcements', announcementId);
+  await firestoreDeleteDoc(announcementRef);
+};
+
+// ==========================================
+// ADMIN — COUPON MANAGEMENT
+// ==========================================
+
+export const createCoupon = async (couponData) => {
+  const docRef = await addDoc(collection(db, 'coupons'), {
+    ...couponData,
+    usedCount: 0,
+    active: true,
+    createdAt: new Date().toISOString()
+  });
+  return { id: docRef.id, ...couponData, usedCount: 0, active: true, createdAt: new Date().toISOString() };
+};
+
+export const getAllCoupons = async () => {
+  const querySnapshot = await getDocs(collection(db, 'coupons'));
+  const list = [];
+  querySnapshot.forEach((docSnap) => {
+    list.push({ id: docSnap.id, ...docSnap.data() });
+  });
+  return list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+};
+
+export const toggleCouponStatus = async (couponId, active) => {
+  const couponRef = doc(db, 'coupons', couponId);
+  await updateDoc(couponRef, { active });
+};
+
+// ==========================================
+// ADMIN — AUDIT LOGS
+// ==========================================
+
+export const addAuditLog = async (adminName, actionType, details) => {
+  await addDoc(collection(db, 'auditLogs'), {
+    adminName,
+    actionType,
+    details,
+    timestamp: new Date().toISOString()
+  });
+};
+
+export const getAuditLogs = async () => {
+  const querySnapshot = await getDocs(collection(db, 'auditLogs'));
+  const list = [];
+  querySnapshot.forEach((docSnap) => {
+    list.push({ id: docSnap.id, ...docSnap.data() });
+  });
+  return list.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+};
+
+// ==========================================
+// ADMIN — DISPUTE CENTER
+// ==========================================
+
+export const getDisputes = async () => {
+  const querySnapshot = await getDocs(collection(db, 'disputes'));
+  const list = [];
+  querySnapshot.forEach((docSnap) => {
+    list.push({ id: docSnap.id, ...docSnap.data() });
+  });
+  return list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+};
+
+export const resolveDispute = async (disputeId, resolutionText) => {
+  const disputeRef = doc(db, 'disputes', disputeId);
+  await updateDoc(disputeRef, {
+    status: 'resolved',
+    resolution: resolutionText,
+    resolvedAt: new Date().toISOString()
+  });
+};
+
+// ==========================================
+// ADMIN — ALL ORDERS (for analytics)
+// ==========================================
+
+export const getAllOrders = async () => {
+  const querySnapshot = await getDocs(collection(db, 'orders'));
+  const list = [];
+  querySnapshot.forEach((docSnap) => {
+    list.push({ id: docSnap.id, ...docSnap.data() });
+  });
+  return list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+};

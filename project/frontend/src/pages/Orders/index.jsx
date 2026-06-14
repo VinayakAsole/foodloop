@@ -79,10 +79,13 @@ export const Orders = () => {
   const [routeData, setRouteData] = useState({}); // { [orderId]: { coords, distance, duration, steps, showMap, loading, error } }
 
   const userCoords = React.useMemo(() => {
-    if (!user || (user.latitude === 0 && user.longitude === 0)) {
+    if (!user) return null;
+    const lat = parseFloat(user.latitude);
+    const lng = parseFloat(user.longitude);
+    if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) {
       return null;
     }
-    return { latitude: user.latitude, longitude: user.longitude };
+    return { latitude: lat, longitude: lng };
   }, [user?.latitude, user?.longitude]);
 
   const handleToggleRoute = async (order) => {

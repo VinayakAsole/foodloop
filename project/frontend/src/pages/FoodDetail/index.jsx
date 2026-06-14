@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { getAvailableFoods, createOrder } from '../../firebase/firestore';
+import { getAvailableFoods, createOrder, addToFavorites, removeFromFavorites, isItemFavorited } from '../../firebase/firestore';
 import { calculateDistance, formatDistance } from '../../utils/haversine';
 import MapView from '../../components/MapView';
 import LiveCounter from '../../components/LiveCounter';
@@ -18,7 +18,8 @@ import {
   CheckCircle2, 
   AlertTriangle,
   RefreshCw,
-  Star
+  Star,
+  Heart
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -36,6 +37,44 @@ export const FoodDetail = () => {
   // Time remaining states
   const [timeLeft, setTimeLeft] = useState('');
   const [isExpired, setIsExpired] = useState(false);
+
+  // Favorite states
+  const [isFavorited, setIsFavorited] = useState(false);
+  const [favLoading, setFavLoading] = useState(false);
+
+  // Check if item is favorited
+  useEffect(() => {
+    const checkFav = async () => {
+      if (user && user.role === 'buyer' && id) {
+        try {
+          const status = await isItemFavorited(user.uid, id);
+          setIsFavorited(status);
+        } catch (e) {
+          console.error("Failed to check favorite status:", e);
+        }
+      }
+    };
+    checkFav();
+  }, [user, id]);
+
+  const toggleFavorite = async () => {
+    if (!user || user.role !== 'buyer' || !food) return;
+    setFavLoading(true);
+    try {
+      if (isFavorited) {
+        await removeFromFavorites(user.uid, id);
+        setIsFavorited(false);
+      } else {
+        await addToFavorites(user.uid, food);
+        setIsFavorited(true);
+      }
+    } catch (e) {
+      console.error("Failed to toggle favorite:", e);
+    } finally {
+      setFavLoading(false);
+    }
+  };
+
 
   // Fetch food item
   useEffect(() => {
@@ -90,7 +129,15 @@ export const FoodDetail = () => {
     return () => clearInterval(timer);
   }, [food]);
 
-  const userCoords = user ? { latitude: user.latitude, longitude: user.longitude } : null;
+  const userCoords = React.useMemo(() => {
+    if (!user) return null;
+    const lat = parseFloat(user.latitude);
+    const lng = parseFloat(user.longitude);
+    if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) {
+      return null;
+    }
+    return { latitude: lat, longitude: lng };
+  }, [user?.latitude, user?.longitude]);
 
   const distance = userCoords && food?.location
     ? calculateDistance(
@@ -178,11 +225,26 @@ export const FoodDetail = () => {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 md:px-8 space-y-6">
-      {/* Back link */}
-      <Link to="/" className="inline-flex items-center space-x-1.5 text-xs text-gray-400 hover:text-white transition">
-        <ArrowLeft size={16} />
-        <span>Back to Browse</span>
-      </Link>
+      {/* Back link & Favorite Button */}
+      <div className="flex justify-between items-center">
+        <Link to="/" className="inline-flex items-center space-x-1.5 text-xs text-gray-400 hover:text-white transition">
+          <ArrowLeft size={16} />
+          <span>Back to Browse</span>
+        </Link>
+        {user && user.role === 'buyer' && (
+          <button
+            onClick={toggleFavorite}
+            disabled={favLoading}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white/5 border border-white/10 hover:border-primary-500/30 text-xs font-bold text-white transition-all active:scale-95 cursor-pointer hover:bg-rose-500/5 group"
+          >
+            <Heart 
+              size={14} 
+              className={`transition-all duration-300 ${isFavorited ? 'text-rose-500 fill-rose-500 scale-110' : 'text-gray-400 group-hover:text-rose-500 group-hover:scale-105'}`} 
+            />
+            <span>{isFavorited ? 'Saved' : 'Save Meal'}</span>
+          </button>
+        )}
+      </div>
 
       {error && (
         <div className="text-xs font-semibold text-rose-400 bg-rose-500/5 border border-rose-500/10 p-3 rounded-xl">

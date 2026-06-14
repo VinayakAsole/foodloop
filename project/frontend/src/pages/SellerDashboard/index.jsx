@@ -8,7 +8,10 @@ import {
   toggleDonation, 
   updateOrderStatus,
   getCategoryAveragePrice,
-  deleteFoodListing
+  deleteFoodListing,
+  createAnnouncement,
+  getSellerAnnouncements,
+  deleteAnnouncement
 } from '../../firebase/firestore';
 import { uploadImage } from '../../firebase/storage';
 import KitchenToggle from '../../components/KitchenToggle';
@@ -39,7 +42,12 @@ import {
   X,
   MapPin,
   Image as ImageIcon,
-  MessageSquare
+  MessageSquare,
+  ChevronDown,
+  ChevronUp,
+  Megaphone,
+  Tag,
+  IndianRupee
 } from 'lucide-react';
 import { simulateLocalNotification } from '../../firebase/messaging';
 
@@ -68,6 +76,7 @@ const CATEGORY_PRICES = { Breakfast: 30, Lunch: 60, Dinner: 70, Snacks: 35 };
 export const SellerDashboard = () => {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') || 'dashboard'; // 'dashboard' or 'orders'
   const [foods, setFoods]             = useState([]);
   const [orders, setOrders]           = useState([]);
   const [kitchenStatus, setKitchenStatus] = useState(user?.kitchenStatus || 'ready');
@@ -112,6 +121,99 @@ export const SellerDashboard = () => {
   // ─── Debounce timer ref for price suggestion ─────────────────────────
   const priceTimerRef = useRef(null);
 
+  // Announcements and Quick Relist states
+  const [announcements, setAnnouncements] = useState([]);
+  const [announcementText, setAnnouncementText] = useState('');
+  const [postingAnnouncement, setPostingAnnouncement] = useState(false);
+  const [isAnnouncementsOpen, setIsAnnouncementsOpen] = useState(false);
+
+  const fetchAnnouncements = async () => {
+    if (!user) return;
+    try {
+      const data = await getSellerAnnouncements(user.uid);
+      setAnnouncements(data);
+    } catch (e) {
+      console.error("Failed to load announcements:", e);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchAnnouncements();
+    }
+  }, [user]);
+
+  const handlePostAnnouncement = async (e) => {
+    e.preventDefault();
+    if (!announcementText.trim() || !user) return;
+    setPostingAnnouncement(true);
+    try {
+      await createAnnouncement(user.uid, announcementText.trim());
+      setAnnouncementText('');
+      await fetchAnnouncements();
+    } catch (e) {
+      console.error("Failed to post announcement:", e);
+    } finally {
+      setPostingAnnouncement(false);
+    }
+  };
+
+  const handleDeleteAnnouncement = async (annId) => {
+    try {
+      await deleteAnnouncement(annId);
+      await fetchAnnouncements();
+    } catch (e) {
+      console.error("Failed to delete announcement:", e);
+    }
+  };
+
+  const handleRelist = (foodItem) => {
+    setShowAddForm(true);
+    setFoodName(foodItem.foodName || '');
+    setCategory(foodItem.category || 'Lunch');
+    setDescription(foodItem.description || '');
+    setPrice(foodItem.isDonation ? '0' : String(foodItem.price || ''));
+    setQuantity(String(foodItem.quantity || ''));
+    setExpiryHours('4');
+    setFoodImage(null);
+    setImagePreview(null);
+    if (foodItem.location) {
+      setPickedLocation({
+        lat: foodItem.location.latitude,
+        lng: foodItem.location.longitude
+      });
+    }
+  };
+
+  const playOrderSound = () => {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      
+      const playTone = (freq, time, duration) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        
+        osc.frequency.setValueAtTime(freq, time);
+        gain.gain.setValueAtTime(0.1, time);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + duration - 0.02);
+        
+        osc.start(time);
+        osc.stop(time + duration);
+      };
+      
+      const now = ctx.currentTime;
+      playTone(523.25, now, 0.15); // C5
+      playTone(659.25, now + 0.12, 0.15); // E5
+      playTone(783.99, now + 0.24, 0.3); // G5
+    } catch (e) {
+      console.warn("Audio context failed or blocked by browser:", e);
+    }
+  };
+
   // ─── Load seller data ─────────────────────────────────────────────────
   const loadSellerData = async () => {
     if (!user) return;
@@ -124,6 +226,10 @@ export const SellerDashboard = () => {
       // Load orders initially
       const ordersData = await getSellerOrders(user.uid);
       setOrders(ordersData);
+
+      // Load announcements
+      const annData = await getSellerAnnouncements(user.uid);
+      setAnnouncements(annData);
     } catch (e) {
       console.error('loadSellerData error:', e);
     } finally {
@@ -157,6 +263,7 @@ export const SellerDashboard = () => {
                 `"${order.foodName}" ordered by ${order.buyerName || 'Buyer'}. OTP: ${order.otpCode}`,
                 "success"
               );
+              playOrderSound();
             }
           });
         }
@@ -464,7 +571,7 @@ export const SellerDashboard = () => {
           />
           <button
             onClick={openForm}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-500 hover:to-primary-700 text-white font-bold rounded-xl transition shadow-lg shadow-primary-500/20 text-sm"
+            className="hidden md:flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-500 hover:to-primary-700 text-white font-bold rounded-xl transition shadow-lg shadow-primary-500/20 text-sm"
           >
             <Plus size={16} />
             Add Meal
@@ -479,12 +586,15 @@ export const SellerDashboard = () => {
         </div>
       </div>
 
-      {/* ── Trust Score ───────────────────────────────────────────────── */}
-      {user?.trustScore !== undefined && (
-        <TrustScore score={user.trustScore} />
-      )}
+      {/* ── Dashboard view contents ── */}
+      {activeTab === 'dashboard' && (
+        <>
+          {/* ── Trust Score ───────────────────────────────────────────────── */}
+          {user?.trustScore !== undefined && (
+            <TrustScore score={user.trustScore} />
+          )}
 
-      {/* ── Stats cards ───────────────────────────────────────────────── */}
+          {/* ── Stats cards ───────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { icon: ShoppingBag, color: 'text-blue-400',      bg: 'bg-blue-500/10',      label: 'Active Listings',   value: activeFoods.length },
@@ -500,6 +610,68 @@ export const SellerDashboard = () => {
             </div>
           </TiltCard>
         ))}
+      </div>
+
+      {/* ── Kitchen Announcements Board ────────────────────────────────── */}
+      <div className="glass-panel rounded-2xl border border-white/10 overflow-hidden shadow-xl my-4">
+        <button
+          onClick={() => setIsAnnouncementsOpen(!isAnnouncementsOpen)}
+          className="w-full flex items-center justify-between p-4 bg-white/3 hover:bg-white/5 transition text-left cursor-pointer"
+        >
+          <div className="flex items-center gap-2 text-sm font-bold text-white uppercase tracking-wider">
+            <Megaphone size={16} className="text-primary-500 animate-bounce" />
+            <span>Kitchen Announcements ({announcements.length})</span>
+          </div>
+          {isAnnouncementsOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </button>
+
+        {isAnnouncementsOpen && (
+          <div className="p-4 space-y-4 border-t border-white/5 bg-[#0f111c]/30">
+            {/* Create Announcement Form */}
+            <form onSubmit={handlePostAnnouncement} className="flex gap-2">
+              <textarea
+                placeholder="Post a new announcement to your kitchen profile (e.g., 'Fresh batch of biryani ready at 5 PM!', 'Special discounts for bulk orders today!')"
+                value={announcementText}
+                onChange={(e) => setAnnouncementText(e.target.value)}
+                required
+                rows={1}
+                className="flex-grow px-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:border-primary-500 focus:outline-none text-xs resize-none"
+              />
+              <button
+                type="submit"
+                disabled={postingAnnouncement || !announcementText.trim()}
+                className="px-4 py-2 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-500 hover:to-primary-700 disabled:from-gray-800 disabled:to-gray-800 disabled:text-gray-500 text-white text-xs font-bold rounded-xl transition shadow-lg shadow-primary-500/20 shrink-0 self-end cursor-pointer"
+              >
+                {postingAnnouncement ? 'Posting...' : 'Post'}
+              </button>
+            </form>
+
+            {/* List Announcements */}
+            {announcements.length > 0 ? (
+              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                {announcements.map((ann) => (
+                  <div key={ann.id} className="flex justify-between items-start gap-4 p-3 bg-white/5 border border-white/5 rounded-xl text-xs animate-slide-up">
+                    <div className="space-y-1">
+                      <p className="text-gray-200 leading-relaxed font-medium">{ann.message}</p>
+                      <span className="text-[9px] text-gray-500 block">
+                        {new Date(ann.createdAt).toLocaleString('en-IN', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteAnnouncement(ann.id)}
+                      className="p-1 hover:bg-rose-500/10 text-gray-500 hover:text-rose-400 rounded-lg transition cursor-pointer self-start"
+                      title="Delete Announcement"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-center py-4 text-xs text-gray-500">No active announcements. Post one to keep your buyers updated!</p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Pending orders ────────────────────────────────────────────── */}
@@ -569,9 +741,12 @@ export const SellerDashboard = () => {
           ))}
         </div>
       )}
+        </>
+      )}
 
-      {/* ── Food listings grid ────────────────────────────────────────── */}
-      <div className="space-y-4">
+      {/* ── Orders view contents (My Listings) ── */}
+      {activeTab === 'orders' && (
+        <div className="space-y-4 animate-slide-up">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-white/5 pb-2">
           <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
             <ShoppingBag size={14} className="text-primary-500" />
@@ -652,16 +827,26 @@ export const SellerDashboard = () => {
                     Expires: {new Date(food.expiryTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                   </div>
                   <div className="mt-auto pt-2">
-                    <button
-                      onClick={() => handleDonationToggle(food.id, !food.isDonation)}
-                      className={`w-full py-1.5 text-xs font-bold rounded-lg border transition ${
-                        food.isDonation
-                          ? 'bg-amber-500/10 border-amber-500/20 text-amber-400 hover:bg-amber-500/20'
-                          : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10'
-                      }`}
-                    >
-                      {food.isDonation ? '🎁 Listed as Donation' : 'Mark as Donation'}
-                    </button>
+                    {listingsTab === 'active' ? (
+                      <button
+                        onClick={() => handleDonationToggle(food.id, !food.isDonation)}
+                        className={`w-full py-1.5 text-xs font-bold rounded-lg border transition ${
+                          food.isDonation
+                            ? 'bg-amber-500/10 border-amber-500/20 text-amber-400 hover:bg-amber-500/20'
+                            : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10'
+                        }`}
+                      >
+                        {food.isDonation ? '🎁 Listed as Donation' : 'Mark as Donation'}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleRelist(food)}
+                        className="w-full py-1.5 text-xs font-bold rounded-lg bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-500 hover:to-primary-700 text-white flex items-center justify-center gap-1.5 transition active:scale-95 shadow-md shadow-primary-500/10 cursor-pointer"
+                      >
+                        <RefreshCw size={12} className="animate-spin-hover" />
+                        <span>Quick Relist</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -669,6 +854,7 @@ export const SellerDashboard = () => {
           </div>
         )}
       </div>
+      )}
 
       {/* ════════════════════════════════════════════════════════════════
           ADD MEAL MODAL
@@ -677,32 +863,32 @@ export const SellerDashboard = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           {/* Backdrop */}
           <div
-            className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
+            className="absolute inset-0 bg-slate-950/85 backdrop-blur-md"
             onClick={closeForm}
           />
 
-          {/* Modal */}
-          <div className="relative w-full max-w-lg bg-slate-900 border border-white/10 rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto neon-border-pulse">
+          {/* Modal Card */}
+          <div className="relative w-full max-w-lg bg-[#0f111c]/90 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-2 shadow-2xl max-h-[90vh] overflow-y-auto neon-glow-primary animate-scale-in">
 
             {/* Modal header */}
-            <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 bg-slate-900 border-b border-white/5">
-              <h2 className="text-base font-black text-white flex items-center gap-2">
-                <Plus size={16} className="text-primary-500" />
-                Add New Meal
+            <div className="sticky top-0 z-10 flex items-center justify-between px-6 pt-5 pb-3 bg-transparent backdrop-blur-sm">
+              <h2 className="text-base font-black text-white flex items-center gap-2 uppercase tracking-wider">
+                <ChefHat size={18} className="text-primary-500 animate-pulse" />
+                <span>Add New Meal</span>
               </h2>
               <button
                 onClick={closeForm}
-                className="p-1.5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition"
+                className="p-1.5 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition cursor-pointer"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleAddFoodSubmit} className="p-6 space-y-5">
+            <form onSubmit={handleAddFoodSubmit} className="px-6 pb-6 space-y-5">
 
               {/* Error banner */}
               {submitError && (
-                <div className="flex items-center gap-2 px-4 py-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-400 text-xs font-semibold">
+                <div className="flex items-center gap-2 px-4 py-3 bg-rose-500/10 border border-rose-500/25 rounded-2xl text-rose-400 text-xs font-semibold animate-pulse">
                   <AlertCircle size={14} className="shrink-0" />
                   {submitError}
                 </div>
@@ -710,13 +896,13 @@ export const SellerDashboard = () => {
 
               {/* ── Image upload ─────────────────────────────────────── */}
               <div className="space-y-2">
-                <label className="text-xs font-bold uppercase text-gray-400">Food Photo (optional)</label>
+                <label className="text-xs font-bold uppercase text-gray-400 ml-1">Food Photo (optional)</label>
                 <label className="flex items-center gap-4 cursor-pointer group">
-                  <div className="relative w-24 h-24 rounded-xl bg-white/5 border-2 border-dashed border-white/15 group-hover:border-primary-500/50 flex items-center justify-center overflow-hidden shrink-0 transition-colors">
+                  <div className="relative w-20 h-20 rounded-2xl bg-white/5 border-2 border-dashed border-white/10 group-hover:border-primary-500/50 flex items-center justify-center overflow-hidden shrink-0 transition-all shadow-inner">
                     {imagePreview ? (
                       <img src={imagePreview} className="w-full h-full object-cover" alt="Preview" />
                     ) : (
-                      <Camera size={22} className="text-gray-500 group-hover:text-primary-500 transition-colors" />
+                      <Camera size={20} className="text-gray-500 group-hover:text-primary-500 transition-colors" />
                     )}
                     <input
                       type="file"
@@ -725,77 +911,89 @@ export const SellerDashboard = () => {
                       className="absolute inset-0 opacity-0 cursor-pointer"
                     />
                   </div>
-                  <div className="text-xs space-y-1.5 flex-grow">
-                    <p className="text-gray-400">
-                      {imagePreview ? 'Photo selected ✓ — click to change' : 'Click to upload a photo of your meal'}
+                  <div className="text-xs space-y-1 flex-grow">
+                    <p className="text-gray-300 font-medium leading-tight">
+                      {imagePreview ? 'Photo selected ✓ — click to change' : 'Upload a fresh photo of your meal'}
                     </p>
                     {aiLoading && (
-                      <div className="flex items-center space-x-1.5 text-primary-500 font-semibold animate-pulse">
+                      <div className="flex items-center space-x-1.5 text-primary-500 font-semibold animate-pulse mt-1">
                         <RefreshCw size={11} className="animate-spin" />
-                        <span>Analyzing...</span>
+                        <span>Analyzing with AI Vision...</span>
                       </div>
                     )}
                     {aiMessage && !aiLoading && (
-                      <div className="px-2.5 py-1.5 bg-secondary-500/10 border border-secondary-500/20 text-secondary-500 rounded-lg flex items-center gap-1.5">
+                      <div className="px-2.5 py-1.5 bg-secondary-500/10 border border-secondary-500/20 text-secondary-500 rounded-xl flex items-center gap-1.5 mt-1 max-w-max">
                         <Sparkles size={11} className="shrink-0" />
-                        <span className="font-semibold">{aiMessage}</span>
+                        <span className="font-semibold text-[10px]">{aiMessage}</span>
                       </div>
                     )}
-                    <p className="text-[10px] text-gray-600">JPG, PNG, WEBP · max 10 MB</p>
+                    <p className="text-[9px] text-gray-600">JPG, PNG, WEBP · max 10 MB</p>
                   </div>
                 </label>
               </div>
 
               {/* ── Meal Name ────────────────────────────────────────── */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold uppercase text-gray-400">
+              <div className="space-y-1.5 text-left w-full">
+                <label className="text-xs font-bold uppercase text-gray-400 ml-1">
                   Meal Name <span className="text-rose-500">*</span>
                 </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Masala Dosa, Rice Plate, Poha"
-                  value={foodName}
-                  onChange={(e) => setFoodName(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-600 focus:border-primary-500 focus:outline-none text-sm transition-all"
-                />
+                <div className="relative glass-input-pill rounded-full overflow-hidden flex items-center">
+                  <ChefHat className="absolute left-5 text-gray-500" size={18} />
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Masala Dosa, Rice Plate, Poha"
+                    value={foodName}
+                    onChange={(e) => setFoodName(e.target.value)}
+                    className="w-full bg-transparent border-none py-3 pl-12 pr-5 text-white placeholder-gray-600 focus:outline-none text-sm focus:ring-0"
+                  />
+                </div>
               </div>
 
               {/* ── Category & Expiry ────────────────────────────────── */}
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold uppercase text-gray-400">Category</label>
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-white/10 bg-slate-800 text-white focus:outline-none text-sm"
-                  >
-                    <option value="Breakfast">Breakfast</option>
-                    <option value="Lunch">Lunch</option>
-                    <option value="Dinner">Dinner</option>
-                    <option value="Snacks">Snacks</option>
-                  </select>
+                <div className="space-y-1.5 text-left">
+                  <label className="text-xs font-bold uppercase text-gray-400 ml-1">Category</label>
+                  <div className="relative glass-input-pill rounded-full overflow-hidden flex items-center">
+                    <Tag className="absolute left-5 text-gray-500" size={18} />
+                    <select
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                      className="w-full bg-transparent border-none py-3 pl-12 pr-8 text-white focus:outline-none text-sm focus:ring-0 appearance-none cursor-pointer"
+                    >
+                      <option value="Breakfast" className="bg-[#0f111c]">Breakfast</option>
+                      <option value="Lunch" className="bg-[#0f111c]">Lunch</option>
+                      <option value="Dinner" className="bg-[#0f111c]">Dinner</option>
+                      <option value="Snacks" className="bg-[#0f111c]">Snacks</option>
+                    </select>
+                    <ChevronDown className="absolute right-4 text-gray-500 pointer-events-none" size={16} />
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold uppercase text-gray-400">Available For</label>
-                  <select
-                    value={expiryHours}
-                    onChange={(e) => setExpiryHours(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-white/10 bg-slate-800 text-white focus:outline-none text-sm"
-                  >
-                    <option value="1">1 Hour</option>
-                    <option value="2">2 Hours</option>
-                    <option value="4">4 Hours</option>
-                    <option value="6">6 Hours</option>
-                    <option value="12">12 Hours</option>
-                  </select>
+
+                <div className="space-y-1.5 text-left">
+                  <label className="text-xs font-bold uppercase text-gray-400 ml-1">Available For</label>
+                  <div className="relative glass-input-pill rounded-full overflow-hidden flex items-center">
+                    <Clock className="absolute left-5 text-gray-500" size={18} />
+                    <select
+                      value={expiryHours}
+                      onChange={(e) => setExpiryHours(e.target.value)}
+                      className="w-full bg-transparent border-none py-3 pl-12 pr-8 text-white focus:outline-none text-sm focus:ring-0 appearance-none cursor-pointer"
+                    >
+                      <option value="1" className="bg-[#0f111c]">1 Hour</option>
+                      <option value="2" className="bg-[#0f111c]">2 Hours</option>
+                      <option value="4" className="bg-[#0f111c]">4 Hours</option>
+                      <option value="6" className="bg-[#0f111c]">6 Hours</option>
+                      <option value="12" className="bg-[#0f111c]">12 Hours</option>
+                    </select>
+                    <ChevronDown className="absolute right-4 text-gray-500 pointer-events-none" size={16} />
+                  </div>
                 </div>
               </div>
 
               {/* ── Price & Quantity ─────────────────────────────────── */}
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <div className="flex justify-between items-center">
+                <div className="space-y-1.5 text-left">
+                  <div className="flex justify-between items-center px-1">
                     <label className="text-xs font-bold uppercase text-gray-400">
                       Price (₹) <span className="text-rose-500">*</span>
                     </label>
@@ -803,67 +1001,80 @@ export const SellerDashboard = () => {
                       <button
                         type="button"
                         onClick={() => setPrice(String(priceRecommendation))}
-                        className="text-[10px] text-primary-500 font-semibold hover:text-primary-400 transition"
+                        className="text-[10px] text-primary-500 font-semibold hover:text-primary-400 transition cursor-pointer"
                       >
                         Use ₹{priceRecommendation}
                       </button>
                     )}
                   </div>
-                  <input
-                    type="number"
-                    required
-                    min="0"
-                    step="1"
-                    placeholder="0 = free donation"
-                    value={price}
-                    onChange={(e) => setPrice(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-600 focus:border-primary-500 focus:outline-none text-sm transition-all"
-                  />
+                  <div className="relative glass-input-pill rounded-full overflow-hidden flex items-center">
+                    <IndianRupee className="absolute left-5 text-gray-500" size={18} />
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      step="1"
+                      placeholder="0 = free donation"
+                      value={price}
+                      onChange={(e) => setPrice(e.target.value)}
+                      className="w-full bg-transparent border-none py-3 pl-12 pr-5 text-white placeholder-gray-600 focus:outline-none text-sm focus:ring-0"
+                    />
+                  </div>
                   {price === '0' && (
-                    <p className="text-[10px] text-secondary-500 font-semibold">🎁 Will be listed as a free donation</p>
+                    <p className="text-[10px] text-secondary-500 font-bold ml-1 animate-pulse">🎁 Listed as free donation</p>
                   )}
                 </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold uppercase text-gray-400">
+
+                <div className="space-y-1.5 text-left">
+                  <label className="text-xs font-bold uppercase text-gray-400 ml-1">
                     Quantity (plates) <span className="text-rose-500">*</span>
                   </label>
-                  <input
-                    type="number"
-                    required
-                    min="1"
-                    step="1"
-                    placeholder="e.g. 5"
-                    value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-600 focus:border-primary-500 focus:outline-none text-sm transition-all"
-                  />
+                  <div className="relative glass-input-pill rounded-full overflow-hidden flex items-center">
+                    <ShoppingBag className="absolute left-5 text-gray-500" size={18} />
+                    <input
+                      type="number"
+                      required
+                      min="1"
+                      step="1"
+                      placeholder="e.g. 5"
+                      value={quantity}
+                      onChange={(e) => setQuantity(e.target.value)}
+                      className="w-full bg-transparent border-none py-3 pl-12 pr-5 text-white placeholder-gray-600 focus:outline-none text-sm focus:ring-0"
+                    />
+                  </div>
                 </div>
               </div>
 
               {/* ── Description ──────────────────────────────────────── */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold uppercase text-gray-400">Description</label>
-                <textarea
-                  placeholder="Ingredients, allergens, spice level, packaging info..."
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={3}
-                  className="w-full px-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-600 focus:border-primary-500 focus:outline-none text-sm transition-all resize-none"
-                />
+              <div className="space-y-1.5 text-left">
+                <label className="text-xs font-bold uppercase text-gray-400 ml-1">Description</label>
+                <div className="relative glass-input-pill rounded-2xl overflow-hidden flex items-start p-3">
+                  <MessageSquare className="text-gray-500 mt-1 shrink-0" size={18} />
+                  <textarea
+                    placeholder="Ingredients, allergens, spice level, packaging info..."
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={3}
+                    className="w-full bg-transparent border-none p-0 pl-3 text-white placeholder-gray-600 focus:outline-none text-sm focus:ring-0 resize-none"
+                  />
+                </div>
               </div>
 
               {/* ── Map Location Picker ─────────────────────────────── */}
-              <div className="space-y-1">
-                <LocationPickerMap
-                  initialLocation={
-                    pickedLocation || 
-                    (user?.latitude && user?.longitude && user.latitude !== 0 && user.longitude !== 0
-                      ? { latitude: user.latitude, longitude: user.longitude }
-                      : null)
-                  }
-                  onLocationChange={(loc) => setPickedLocation(loc)}
-                  height="220px"
-                />
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold uppercase text-gray-400 ml-1">Pin Kitchen Coordinates</label>
+                <div className="rounded-2xl overflow-hidden border border-white/10">
+                  <LocationPickerMap
+                    initialLocation={
+                      pickedLocation || 
+                      (user?.latitude && user?.longitude && user.latitude !== 0 && user.longitude !== 0
+                        ? { latitude: user.latitude, longitude: user.longitude }
+                        : null)
+                    }
+                    onLocationChange={(loc) => setPickedLocation(loc)}
+                    height="200px"
+                  />
+                </div>
               </div>
 
               {/* ── Action buttons ───────────────────────────────────── */}
@@ -872,14 +1083,14 @@ export const SellerDashboard = () => {
                   type="button"
                   onClick={closeForm}
                   disabled={formSubmitting}
-                  className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-white font-semibold rounded-xl border border-white/10 transition disabled:opacity-50"
+                  className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-full border border-white/10 transition active:scale-[0.98] cursor-pointer disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={formSubmitting}
-                  className="flex-2 flex-grow py-3 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-500 hover:to-primary-700 disabled:from-gray-700 disabled:to-gray-700 disabled:text-gray-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-primary-500/15"
+                  className="flex-2 flex-grow py-3 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-slate-950 font-black rounded-full transition-all shadow-md shadow-primary-500/25 active:scale-[0.98] cursor-pointer disabled:from-gray-700 disabled:to-gray-700 disabled:text-gray-500"
                 >
                   {formSubmitting ? (
                     <span className="flex items-center justify-center gap-2">
@@ -887,7 +1098,7 @@ export const SellerDashboard = () => {
                       Posting...
                     </span>
                   ) : (
-                    'Publish Meal'
+                    'Publish Meal Listing'
                   )}
                 </button>
               </div>

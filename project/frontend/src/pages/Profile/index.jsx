@@ -56,7 +56,15 @@ export const Profile = () => {
     navigate('/auth');
   };
 
-  const userCoords = user ? { latitude: user.latitude, longitude: user.longitude } : null;
+  const userCoords = React.useMemo(() => {
+    if (!user) return null;
+    const lat = parseFloat(user.latitude);
+    const lng = parseFloat(user.longitude);
+    if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) {
+      return null;
+    }
+    return { latitude: lat, longitude: lng };
+  }, [user?.latitude, user?.longitude]);
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 md:px-8 space-y-6">

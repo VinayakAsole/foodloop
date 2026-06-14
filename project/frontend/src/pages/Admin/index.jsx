@@ -26,6 +26,16 @@ import {
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { simulateLocalNotification } from '../../firebase/messaging';
+import {
+  getAllOrders,
+  createCoupon,
+  getAllCoupons,
+  toggleCouponStatus,
+  addAuditLog,
+  getAuditLogs,
+  getDisputes,
+  resolveDispute
+} from '../../firebase/firestore';
 
 // ── Status Badge ────────────────────────────────────────────────────────
 const StatusBadge = ({ status }) => {
@@ -125,6 +135,14 @@ export const Admin = () => {
       const status = approve ? 'verified' : 'suspended';
       await updateDoc(doc(db, 'users', uid), { status });
       await updateDoc(doc(db, 'sellers', uid), { status }).catch(() => {});
+      
+      const targetUser = users.find(u => u.uid === uid);
+      await addAuditLog(
+        user?.name || 'Admin', 
+        approve ? 'VERIFY_SELLER' : 'SUSPEND_SELLER', 
+        `${approve ? 'Approved' : 'Suspended'} chef kitchen: ${targetUser?.kitchenName || targetUser?.name || uid}`
+      );
+
       simulateLocalNotification(
         approve ? 'Seller Verified!' : 'Seller Suspended',
         `Home Cook has been ${approve ? 'verified and activated' : 'suspended'}.`,
@@ -158,6 +176,234 @@ export const Admin = () => {
     ? sellers.reduce((top, s) => (s.financials?.total || 0) > (top?.financials?.total || 0) ? s : top, null)
     : null;
 
+  const [orders, setOrders] = useState([]);
+  const [coupons, setCoupons] = useState([]);
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [disputes, setDisputes] = useState([]);
+
+  // Coupon form state
+  const [couponCode, setCouponCode] = useState('');
+  const [couponDiscount, setCouponDiscount] = useState('');
+  const [couponMaxUses, setCouponMaxUses] = useState('');
+  const [couponExpiry, setCouponExpiry] = useState('');
+
+  // Dispute resolution state
+  const [resolvingDisputeId, setResolvingDisputeId] = useState(null);
+  const [disputeResolution, setDisputeResolution] = useState('');
+
+  const loadAnalyticsData = async () => {
+    try {
+      const data = await getAllOrders();
+      setOrders(data);
+    } catch (e) {
+      console.error("Failed to load platform orders:", e);
+    }
+  };
+
+  const loadCouponsData = async () => {
+    try {
+      const data = await getAllCoupons();
+      setCoupons(data);
+    } catch (e) {
+      console.error("Failed to load coupons:", e);
+    }
+  };
+
+  const loadAuditLogsData = async () => {
+    try {
+      const data = await getAuditLogs();
+      setAuditLogs(data);
+    } catch (e) {
+      console.error("Failed to load audit logs:", e);
+    }
+  };
+
+  const loadDisputesData = async () => {
+    try {
+      const data = await getDisputes();
+      setDisputes(data);
+    } catch (e) {
+      console.error("Failed to load disputes:", e);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'analytics') loadAnalyticsData();
+    if (activeTab === 'coupons') loadCouponsData();
+    if (activeTab === 'audit') loadAuditLogsData();
+    if (activeTab === 'disputes') loadDisputesData();
+  }, [activeTab]);
+
+  // Load disputes count on mount for badges
+  useEffect(() => {
+    const fetchCounts = async () => {
+      try {
+        const dList = await getDisputes();
+        setDisputes(dList);
+      } catch (e) {}
+    };
+    fetchCounts();
+  }, []);
+
+  const handleCreateCoupon = async (e) => {
+    e.preventDefault();
+    if (!couponCode.trim()) return;
+    try {
+      await createCoupon({
+        code: couponCode.trim().toUpperCase(),
+        discountPercent: parseInt(couponDiscount),
+        maxUses: parseInt(couponMaxUses) || 999,
+        expiryDate: couponExpiry
+      });
+      await addAuditLog(user?.name || 'Admin', 'CREATE_COUPON', `Created coupon: ${couponCode.toUpperCase()}`);
+      setCouponCode('');
+      setCouponDiscount('');
+      setCouponMaxUses('');
+      setCouponExpiry('');
+      loadCouponsData();
+      simulateLocalNotification("Coupon Created!", `Promo code ${couponCode.toUpperCase()} is active.`, "success");
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleToggleCoupon = async (couponId, code, active) => {
+    try {
+      await toggleCouponStatus(couponId, active);
+      await addAuditLog(user?.name || 'Admin', 'TOGGLE_COUPON', `${active ? 'Activated' : 'Deactivated'} coupon: ${code}`);
+      loadCouponsData();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleResolveDispute = async (e) => {
+    e.preventDefault();
+    if (!disputeResolution.trim() || !resolvingDisputeId) return;
+    try {
+      await resolveDispute(resolvingDisputeId, disputeResolution.trim());
+      await addAuditLog(user?.name || 'Admin', 'RESOLVE_DISPUTE', `Resolved dispute ID: ${resolvingDisputeId}`);
+      setResolvingDisputeId(null);
+      setDisputeResolution('');
+      loadDisputesData();
+      simulateLocalNotification("Dispute Resolved", "Resolution updated successfully.", "success");
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const getAnalyticsChartsData = () => {
+    const now = new Date();
+    const last7Days = Array.from({ length: 7 }).map((_, i) => {
+      const d = new Date();
+      d.setDate(now.getDate() - (6 - i));
+      return d.toISOString().split('T')[0];
+    });
+
+    const dailySignups = last7Days.map(dateStr => {
+      return users.filter(u => u.createdAt && u.createdAt.startsWith(dateStr)).length;
+    });
+
+    const dailyOrders = last7Days.map(dateStr => {
+      return orders.filter(o => o.createdAt && o.createdAt.startsWith(dateStr)).length;
+    });
+
+    const dayLabels = last7Days.map(dateStr => {
+      const parts = dateStr.split('-');
+      return `${parts[2]}/${parts[1]}`;
+    });
+
+    return { dailySignups, dailyOrders, dayLabels };
+  };
+
+  const chartsData = getAnalyticsChartsData();
+
+  const SVGBarChart = ({ data, labels, color = 'primary', height = 150 }) => {
+    const max = Math.max(...data, 1);
+    const chartWidth = data.length * 60;
+    const colors = {
+      primary: { fill: 'url(#grad-primary)', text: '#FF6B35' },
+      secondary: { fill: 'url(#grad-secondary)', text: '#2EC4B6' }
+    };
+    const activeColor = colors[color] || colors.primary;
+
+    return (
+      <div className="w-full overflow-x-auto">
+        <svg viewBox={`0 0 ${chartWidth} ${height + 40}`} className="w-full min-w-[350px]" style={{ height: height + 40 }}>
+          <defs>
+            <linearGradient id="grad-primary" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#FF6B35" />
+              <stop offset="100%" stopColor="#be3d13" stopOpacity="0.4" />
+            </linearGradient>
+            <linearGradient id="grad-secondary" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#2EC4B6" />
+              <stop offset="100%" stopColor="#20a89c" stopOpacity="0.4" />
+            </linearGradient>
+          </defs>
+          {[0.25, 0.5, 0.75, 1].map((ratio) => (
+            <line
+              key={ratio}
+              x1="0"
+              y1={height - ratio * height}
+              x2={chartWidth}
+              y2={height - ratio * height}
+              stroke="rgba(255,255,255,0.05)"
+              strokeWidth="1"
+            />
+          ))}
+          {data.map((val, i) => {
+            const barHeight = (val / max) * height;
+            const x = i * 60 + 15;
+            const y = height - barHeight;
+            return (
+              <g key={i} className="group">
+                <rect
+                  x={x - 5}
+                  y={y - 25}
+                  width="40"
+                  height="18"
+                  rx="4"
+                  fill="#16192b"
+                  className="opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                />
+                <text
+                  x={x + 15}
+                  y={y - 12}
+                  fill="#fff"
+                  fontSize="10"
+                  fontWeight="black"
+                  textAnchor="middle"
+                  className="opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                >
+                  {val}
+                </text>
+                <rect
+                  x={x}
+                  y={y}
+                  width="30"
+                  height={barHeight}
+                  rx="4"
+                  fill={activeColor.fill}
+                  className="transition-all duration-300 hover:brightness-110 cursor-pointer"
+                />
+                <text
+                  x={x + 15}
+                  y={height + 18}
+                  fill="rgba(255,255,255,0.4)"
+                  fontSize="10"
+                  fontWeight="bold"
+                  textAnchor="middle"
+                >
+                  {labels[i]}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    );
+  };
+
   // Search filter for "all users" tab
   const q = searchQuery.toLowerCase();
   const filteredUsers = users.filter(u => {
@@ -174,10 +420,16 @@ export const Admin = () => {
     );
   });
 
+  const openDisputes = disputes.filter(d => d.status === 'open');
+
   const TABS = [
     { key: 'registrations', label: 'Pending Approval',  badge: pendingSellers.length },
     { key: 'users',         label: 'All Users',         badge: users.length },
     { key: 'watchlist',     label: 'Trust Watchlist',   badge: lowTrustSellers.length },
+    { key: 'analytics',     label: 'Analytics',         badge: null },
+    { key: 'coupons',       label: 'Coupons',           badge: coupons.length },
+    { key: 'disputes',      label: 'Disputes',          badge: openDisputes.length },
+    { key: 'audit',         label: 'Audit Log',         badge: null },
     { key: 'reports',       label: 'Reports',           badge: null },
   ];
 
@@ -666,6 +918,288 @@ export const Admin = () => {
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ══ ANALYTICS ════════════════════════════════════════════════════ */}
+      {activeTab === 'analytics' && (
+        <div className="space-y-6 animate-slide-up">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="glass-panel p-4 rounded-xl border border-white/5 bg-slate-900/40 text-center">
+              <span className="text-2xl font-black text-primary-500 block">
+                {orders.reduce((acc, o) => acc + (o.quantity || 0), 0)}
+              </span>
+              <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Plates Saved</span>
+            </div>
+            <div className="glass-panel p-4 rounded-xl border border-white/5 bg-slate-900/40 text-center">
+              <span className="text-2xl font-black text-secondary-500 block">
+                {(orders.reduce((acc, o) => acc + (o.quantity || 0), 0) * 0.5).toFixed(1)} kg
+              </span>
+              <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Food Waste Saved</span>
+            </div>
+            <div className="glass-panel p-4 rounded-xl border border-white/5 bg-slate-900/40 text-center">
+              <span className="text-2xl font-black text-emerald-400 block">
+                ₹{orders.reduce((acc, o) => acc + (o.totalPrice || 0), 0)}
+              </span>
+              <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Platform GMV</span>
+            </div>
+            <div className="glass-panel p-4 rounded-xl border border-white/5 bg-slate-900/40 text-center">
+              <span className="text-2xl font-black text-purple-400 block">
+                {users.length}
+              </span>
+              <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Registered Users</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="glass-panel p-5 rounded-2xl border border-white/10 space-y-4">
+              <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-gray-200">Daily Signups (Last 7 Days)</h3>
+                <span className="text-[10px] text-primary-500 font-bold">Users</span>
+              </div>
+              <SVGBarChart data={chartsData.dailySignups} labels={chartsData.dayLabels} color="primary" />
+            </div>
+
+            <div className="glass-panel p-5 rounded-2xl border border-white/10 space-y-4">
+              <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-gray-200">Orders Handovers (Last 7 Days)</h3>
+                <span className="text-[10px] text-secondary-500 font-bold">Orders</span>
+              </div>
+              <SVGBarChart data={chartsData.dailyOrders} labels={chartsData.dayLabels} color="secondary" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ COUPONS ══════════════════════════════════════════════════════ */}
+      {activeTab === 'coupons' && (
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 animate-slide-up">
+          <div className="glass-panel p-5 rounded-2xl border border-white/10 md:col-span-5 space-y-4">
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+              <Gift size={16} className="text-primary-500" />
+              Create Promo Code
+            </h3>
+            <form onSubmit={handleCreateCoupon} className="space-y-4 text-xs">
+              <div className="space-y-1">
+                <label className="text-gray-400 font-bold uppercase">Promo Code</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. SAVER20"
+                  value={couponCode}
+                  onChange={(e) => setCouponCode(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-white focus:outline-none focus:border-primary-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-gray-400 font-bold uppercase">Discount (%)</label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    max="100"
+                    placeholder="20"
+                    value={couponDiscount}
+                    onChange={(e) => setCouponDiscount(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-white focus:outline-none focus:border-primary-500"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-gray-400 font-bold uppercase">Max Uses</label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="100"
+                    value={couponMaxUses}
+                    onChange={(e) => setCouponMaxUses(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-white focus:outline-none focus:border-primary-500"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-gray-400 font-bold uppercase">Expiry Date</label>
+                <input
+                  type="date"
+                  required
+                  value={couponExpiry}
+                  onChange={(e) => setCouponExpiry(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-white focus:outline-none focus:border-primary-500"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-500 hover:to-primary-700 text-white font-bold rounded-xl transition shadow-lg shadow-primary-500/20 cursor-pointer"
+              >
+                Activate Coupon
+              </button>
+            </form>
+          </div>
+
+          <div className="glass-panel p-5 rounded-2xl border border-white/10 md:col-span-7 space-y-4">
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider">Active Promotional Coupons</h3>
+            {coupons.length > 0 ? (
+              <div className="divide-y divide-white/5 max-h-96 overflow-y-auto pr-1">
+                {coupons.map((coupon) => (
+                  <div key={coupon.id} className="py-3 flex justify-between items-center gap-4 text-xs">
+                    <div>
+                      <span className="font-mono font-black text-sm text-white bg-white/5 px-2 py-1 rounded border border-white/10">{coupon.code}</span>
+                      <div className="text-[10px] text-gray-400 mt-1.5 space-x-3">
+                        <span>🏷️ {coupon.discountPercent}% OFF</span>
+                        <span>👥 Uses: {coupon.usedCount || 0}/{coupon.maxUses}</span>
+                        <span className="text-rose-400">📅 Exp: {formatDate(coupon.expiryDate)}</span>
+                      </div>
+                    </div>
+                    
+                    <button
+                      onClick={() => handleToggleCoupon(coupon.id, coupon.code, !coupon.active)}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition cursor-pointer border ${
+                        coupon.active
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-rose-500/10 hover:text-rose-400 hover:border-rose-500/20'
+                          : 'bg-white/5 text-gray-500 border-white/5 hover:bg-emerald-500/10 hover:text-emerald-400 hover:border-emerald-500/20'
+                      }`}
+                    >
+                      {coupon.active ? 'Disable' : 'Enable'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-center py-12 text-xs text-gray-500">No promo coupons created yet.</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ══ DISPUTES ═════════════════════════════════════════════════════ */}
+      {activeTab === 'disputes' && (
+        <div className="glass-panel p-5 rounded-2xl border border-white/10 space-y-4 animate-slide-up">
+          <h3 className="text-sm font-bold text-white uppercase tracking-wider">Handoff Dispute Center</h3>
+          {disputes.length > 0 ? (
+            <div className="space-y-4 max-h-96 overflow-y-auto pr-1">
+              {disputes.map((d) => (
+                <div key={d.id} className="p-4 bg-white/5 border border-white/5 rounded-xl text-xs space-y-3">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="font-bold text-white block">Dispute #{d.id.slice(-6)}</span>
+                      <span className="text-[9px] text-gray-500">Created: {formatDate(d.createdAt)}</span>
+                    </div>
+                    <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                      d.status === 'resolved' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                    }`}>
+                      {d.status}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 border-t border-b border-white/5 py-2.5 text-[11px]">
+                    <div>
+                      <span className="text-gray-500 block">Buyer Name</span>
+                      <span className="font-semibold text-gray-200">{d.buyerName}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block">Seller Kitchen</span>
+                      <span className="font-semibold text-gray-200">{d.sellerName}</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <span className="text-gray-500 text-[10px] block font-bold uppercase">Complaint / Dispute Issue</span>
+                    <p className="text-gray-300 font-medium bg-black/20 p-2.5 rounded-lg">"{d.complaint}"</p>
+                  </div>
+
+                  {d.status === 'resolved' ? (
+                    <div className="bg-emerald-500/5 border-l-2 border-emerald-500 p-3 rounded-r-xl space-y-1 text-[11px]">
+                      <span className="font-bold text-emerald-400">Resolution Update</span>
+                      <p className="text-gray-400 italic">"{d.resolution}"</p>
+                    </div>
+                  ) : (
+                    resolvingDisputeId === d.id ? (
+                      <form onSubmit={handleResolveDispute} className="flex gap-2">
+                        <input
+                          type="text"
+                          required
+                          placeholder="Provide dispute resolution verdict..."
+                          value={disputeResolution}
+                          onChange={(e) => setDisputeResolution(e.target.value)}
+                          className="flex-grow px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-white focus:outline-none"
+                        />
+                        <button
+                          type="submit"
+                          className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold rounded-xl transition cursor-pointer"
+                        >
+                          Submit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setResolvingDisputeId(null)}
+                          className="px-3 py-2 bg-white/5 hover:bg-white/10 text-white rounded-xl transition cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                      </form>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setResolvingDisputeId(d.id);
+                          setDisputeResolution('');
+                        }}
+                        className="px-3 py-1.5 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-lg transition text-[10px] uppercase cursor-pointer"
+                      >
+                        Resolve Dispute
+                      </button>
+                    )
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-center py-12 text-xs text-gray-500">✅ Clean slate! No open complaints or disputes reported.</p>
+          )}
+        </div>
+      )}
+
+      {/* ══ AUDIT LOG ═════════════════════════════════════════════════════ */}
+      {activeTab === 'audit' && (
+        <div className="glass-panel p-5 rounded-2xl border border-white/10 space-y-4 animate-slide-up">
+          <h3 className="text-sm font-bold text-white uppercase tracking-wider">Platform Security Audit Log</h3>
+          {auditLogs.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-white/5 bg-white/5 text-[10px] text-gray-400 uppercase font-semibold">
+                    <th className="p-3">Timestamp</th>
+                    <th className="p-3">Admin</th>
+                    <th className="p-3">Action</th>
+                    <th className="p-3">Audit Details</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5 text-gray-300">
+                  {auditLogs.map((log) => (
+                    <tr key={log.id} className="hover:bg-white/2">
+                      <td className="p-3 text-gray-500 whitespace-nowrap">{new Date(log.timestamp).toLocaleString('en-IN')}</td>
+                      <td className="p-3 font-semibold text-white whitespace-nowrap">{log.adminName}</td>
+                      <td className="p-3 whitespace-nowrap">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          log.actionType === 'CREATE_COUPON' ? 'bg-primary-500/10 text-primary-500' :
+                          log.actionType === 'VERIFY_SELLER' ? 'bg-emerald-500/10 text-emerald-400' :
+                          log.actionType === 'SUSPEND_SELLER' ? 'bg-rose-500/10 text-rose-400' :
+                          'bg-blue-500/10 text-blue-400'
+                        }`}>
+                          {log.actionType}
+                        </span>
+                      </td>
+                      <td className="p-3 text-gray-400">{log.details}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-center py-12 text-xs text-gray-500">Audit log registry is currently empty.</p>
+          )}
         </div>
       )}
 

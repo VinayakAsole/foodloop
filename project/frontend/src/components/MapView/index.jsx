@@ -87,12 +87,19 @@ const LiveCountdown = ({ expiryTime }) => {
 };
 
 export const MapView = ({ foods = [], buyerCoords = null, centerCoords = null, routeCoords = null, height = '400px' }) => {
-  // Map center will prioritize buyerCoords, then centerCoords, then default Mumbai
   const defaultCenter = [19.0760, 72.8777];
-  const mapCenter = buyerCoords
-    ? [buyerCoords.latitude, buyerCoords.longitude]
-    : centerCoords
-      ? [centerCoords.latitude, centerCoords.longitude]
+
+  const isValidCoords = (coords) => {
+    if (!coords) return false;
+    const lat = parseFloat(coords.latitude);
+    const lng = parseFloat(coords.longitude);
+    return !isNaN(lat) && !isNaN(lng);
+  };
+
+  const mapCenter = isValidCoords(buyerCoords)
+    ? [parseFloat(buyerCoords.latitude), parseFloat(buyerCoords.longitude)]
+    : isValidCoords(centerCoords)
+      ? [parseFloat(centerCoords.latitude), parseFloat(centerCoords.longitude)]
       : defaultCenter;
 
   return (
@@ -125,12 +132,12 @@ export const MapView = ({ foods = [], buyerCoords = null, centerCoords = null, r
         )}
 
         {/* Render Buyer GPS Location Marker */}
-        {buyerCoords && (
-          <Marker position={[buyerCoords.latitude, buyerCoords.longitude]} icon={buyerIcon}>
+        {isValidCoords(buyerCoords) && (
+          <Marker position={[parseFloat(buyerCoords.latitude), parseFloat(buyerCoords.longitude)]} icon={buyerIcon}>
             <Popup>
               <div className="text-xs p-1">
                 <p className="font-bold text-blue-400">You Are Here</p>
-                <p className="text-gray-400 mt-0.5">Mock Location Coordinates: {buyerCoords.latitude.toFixed(4)}, {buyerCoords.longitude.toFixed(4)}</p>
+                <p className="text-gray-400 mt-0.5">Mock Location Coordinates: {parseFloat(buyerCoords.latitude).toFixed(4)}, {parseFloat(buyerCoords.longitude).toFixed(4)}</p>
               </div>
             </Popup>
           </Marker>
@@ -138,11 +145,11 @@ export const MapView = ({ foods = [], buyerCoords = null, centerCoords = null, r
 
         {/* Render Food Sellers Markers */}
         {foods.map((food) => {
-          if (!food.location) return null;
+          if (!food.location || !isValidCoords(food.location)) return null;
           return (
             <Marker
               key={food.id}
-              position={[food.location.latitude, food.location.longitude]}
+              position={[parseFloat(food.location.latitude), parseFloat(food.location.longitude)]}
               icon={foodIcon}
             >
               <Popup>

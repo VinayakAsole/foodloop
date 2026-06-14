@@ -6,23 +6,22 @@ import FoodCard from '../../components/FoodCard';
 import MapView from '../../components/MapView';
 import EcoImpactWidget from '../../components/EcoImpactWidget';
 import { calculateDistance } from '../../utils/haversine';
-import { onSnapshot, collection, query, where } from 'firebase/firestore';
+import { onSnapshot, collection, query, where, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import TiltCard from '../../components/TiltCard';
 import { 
   Search, 
-  Map, 
-  List, 
   SlidersHorizontal, 
   MapPin, 
   Sparkles,
   TrendingUp,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  Compass
 } from 'lucide-react';
 
 export const Home = () => {
-  const { user } = useAuth();
+  const { user, updateProfileState } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [foods, setFoods] = useState([]);
   const [filteredFoods, setFilteredFoods] = useState([]);
@@ -33,7 +32,7 @@ export const Home = () => {
   const [isVegOnly, setIsVegOnly] = useState(false);
   const [maxDistance, setMaxDistance] = useState(10); // default 10km radius
   const [sortBy, setSortBy] = useState('nearest'); // 'nearest', 'cheapest', 'highest_rated'
-  const [showMap, setShowMap] = useState(true);
+  const showMap = searchParams.get('map') === 'true';
   const [loading, setLoading] = useState(true);
 
   // PWA Install states
@@ -42,10 +41,13 @@ export const Home = () => {
 
   // User coordinates (from profile)
   const userCoords = React.useMemo(() => {
-    if (!user || (user.latitude === 0 && user.longitude === 0)) {
+    if (!user) return null;
+    const lat = parseFloat(user.latitude);
+    const lng = parseFloat(user.longitude);
+    if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) {
       return null;
     }
-    return { latitude: user.latitude, longitude: user.longitude };
+    return { latitude: lat, longitude: lng };
   }, [user?.latitude, user?.longitude]);
 
   // Categories list
@@ -99,19 +101,81 @@ export const Home = () => {
     return () => clearInterval(clock);
   }, []);
 
-  useEffect(() => {
-    if (searchParams.get('map') === 'true') {
-      setShowMap(true);
-      const newParams = new URLSearchParams(searchParams);
-      newParams.delete('map');
-      setSearchParams(newParams, { replace: true });
-    } else if (searchParams.get('map') === 'false') {
-      setShowMap(false);
-      const newParams = new URLSearchParams(searchParams);
-      newParams.delete('map');
-      setSearchParams(newParams, { replace: true });
+  const [showLocationModal, setShowLocationModal] = useState(false);
+
+  const requestGeoLocation = () => {
+    if (user && 'geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          console.log("Device GPS Coordinates acquired:", latitude, longitude);
+          
+          // Sync memory state
+          if (updateProfileState) {
+            updateProfileState({ latitude, longitude });
+          }
+          
+          // Sync persistent Firestore profile
+          try {
+            await updateDoc(doc(db, 'users', user.uid), {
+              latitude,
+              longitude
+            });
+            console.log("Updated device coordinates in Firestore user profile.");
+          } catch (err) {
+            console.error("Failed to update coordinates in Firestore profile:", err);
+          }
+          setShowLocationModal(false);
+        },
+        (error) => {
+          console.warn("Geolocation permission denied/unavailable. Using profile or fallback:", error.message);
+          setShowLocationModal(false);
+        },
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+      );
+    } else {
+      setShowLocationModal(false);
     }
-  }, [searchParams]);
+  };
+
+  // Check browser geolocation permission status to decide if we show the custom modal
+  useEffect(() => {
+    if (!user) return;
+
+    const checkLocationPermission = async () => {
+      // Only prompt for buyer role
+      if (user.role !== 'buyer') return;
+
+      if ('permissions' in navigator) {
+        try {
+          const result = await navigator.permissions.query({ name: 'geolocation' });
+          if (result.state === 'prompt') {
+            // User hasn't granted or denied yet, show our premium explanation modal
+            setShowLocationModal(true);
+          } else if (result.state === 'granted') {
+            // Already granted, fetch coordinates automatically
+            requestGeoLocation();
+          }
+          
+          // Listen for permission change events
+          result.onchange = () => {
+            if (result.state === 'granted') {
+              requestGeoLocation();
+              setShowLocationModal(false);
+            }
+          };
+        } catch (err) {
+          console.warn("Permissions API not supported or failed. Showing location modal by default:", err);
+          setShowLocationModal(true);
+        }
+      } else {
+        // Fallback for older browsers
+        setShowLocationModal(true);
+      }
+    };
+
+    checkLocationPermission();
+  }, [user?.uid, user?.role]);
 
   // Real-time Firestore active foods listener
   useEffect(() => {
@@ -297,16 +361,8 @@ export const Home = () => {
           </button>
         </div>
 
-        {/* View Toggle */}
-        <div className="md:col-span-3 flex justify-end space-x-2">
-          <button
-            onClick={() => setShowMap(!showMap)}
-            className="flex items-center space-x-1.5 px-3 py-2.5 rounded-xl border border-white/10 bg-white/5 text-gray-300 hover:text-white text-xs font-semibold"
-          >
-            {showMap ? <List size={16} /> : <Map size={16} />}
-            <span>{showMap ? 'Hide Map' : 'Show Map'}</span>
-          </button>
-          
+        {/* Sort Controls */}
+        <div className="md:col-span-3 flex justify-end">
           <div className="relative inline-block text-left">
             <select
               value={sortBy}
@@ -338,18 +394,32 @@ export const Home = () => {
         </div>
       )}
 
-      {/* Main Grid content */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        
-        {/* Left Side: Food Cards Grid */}
-        <div className={`${showMap ? 'lg:col-span-8' : 'lg:col-span-12'} space-y-4`}>
+      {/* Main Content */}
+      {showMap ? (
+        /* Exploration View: Live Food Map (Full width) */
+        <div className="glass-panel p-4 rounded-2xl border border-white/10 neon-glow-primary space-y-3">
+          <div className="flex items-center justify-between px-1">
+            <div className="flex items-center space-x-2">
+              <Compass className="text-secondary-500 animate-pulse" size={20} />
+              <span className="text-xs font-bold text-white uppercase tracking-wider">Live Food Map Exploration</span>
+            </div>
+            <span className="text-xs text-gray-400 flex items-center space-x-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-secondary-500 animate-ping"></span>
+              <span><strong>{filteredFoods.length}</strong> active meals near you</span>
+            </span>
+          </div>
+          <MapView foods={filteredFoods} buyerCoords={userCoords} height="520px" />
+        </div>
+      ) : (
+        /* Home View: Meal Details Grid Only */
+        <div className="space-y-4">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-20 space-y-3">
               <RefreshCw size={36} className="text-primary-500 animate-spin" />
               <p className="text-xs text-gray-400">Loading delicious home-cooked meals...</p>
             </div>
           ) : filteredFoods.length > 0 ? (
-            <div className={`grid grid-cols-1 md:grid-cols-2 ${showMap ? '' : 'lg:grid-cols-3'} gap-6`}>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredFoods.map((food) => (
                 <FoodCard 
                   key={food.id} 
@@ -368,24 +438,69 @@ export const Home = () => {
             </div>
           )}
         </div>
+      )}
 
-        {/* Right Side: Map View */}
-        {showMap && (
-          <div className="lg:col-span-4 lg:sticky lg:top-24">
-            <div className="glass-panel p-3 rounded-2xl border border-white/10 neon-glow-primary">
-              <div className="flex items-center justify-between mb-2 px-1">
-                <span className="text-xs font-bold text-white uppercase tracking-wider">Live Food Map</span>
-                <span className="text-[10px] text-gray-400 flex items-center space-x-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-secondary-500 animate-ping"></span>
-                  <span>{filteredFoods.length} locations</span>
-                </span>
+      {/* Location Permission Premium Modal */}
+      {showLocationModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-slate-950/85 backdrop-blur-md" 
+            onClick={() => setShowLocationModal(false)} 
+          />
+          
+          {/* Modal Card */}
+          <div className="relative w-full max-w-md bg-[#0f111c]/90 backdrop-blur-2xl border border-white/10 rounded-3xl p-6 shadow-2xl z-10 text-center space-y-6 neon-glow-secondary animate-scale-in">
+            {/* Pulsing Icon */}
+            <div className="flex justify-center">
+              <div className="relative flex items-center justify-center w-16 h-16 rounded-full bg-secondary-500/10 border-2 border-secondary-500/20 text-secondary-500 shadow-[0_0_20px_rgba(46,196,182,0.15)] animate-bounce-subtle">
+                <MapPin size={32} className="animate-pulse" />
+                <span className="absolute inset-0 rounded-full border border-secondary-500 animate-ping opacity-25"></span>
               </div>
-              <MapView foods={filteredFoods} buyerCoords={userCoords} height="480px" />
+            </div>
+            
+            {/* Header & Body */}
+            <div className="space-y-2">
+              <h3 className="text-lg font-black text-white uppercase tracking-wider">Enable Location Services</h3>
+              <p className="text-xs text-gray-300 leading-relaxed max-w-xs mx-auto">
+                Discover delicious home-cooked meals prepared in your neighborhood and explore active kitchens on the live food map.
+              </p>
+            </div>
+
+            {/* Features List */}
+            <div className="glass-panel-light p-3 rounded-xl text-left space-y-2 text-[10px] text-gray-400">
+              <div className="flex items-center space-x-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-secondary-500 shrink-0"></span>
+                <span>Calculate precise delivery/pickup distances in real-time</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-secondary-500 shrink-0"></span>
+                <span>Filter active listings by nearest distance (e.g. within 2km)</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-secondary-500 shrink-0"></span>
+                <span>Interactive map routing showing local seller routes</span>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col space-y-2">
+              <button
+                onClick={requestGeoLocation}
+                className="w-full py-2.5 bg-gradient-to-r from-secondary-500 to-secondary-600 hover:from-secondary-600 hover:to-secondary-700 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md shadow-secondary-500/25 active:scale-[0.98] cursor-pointer"
+              >
+                Share My Location
+              </button>
+              <button
+                onClick={() => setShowLocationModal(false)}
+                className="w-full py-2.5 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white font-semibold rounded-xl text-xs transition active:scale-[0.98] cursor-pointer"
+              >
+                Maybe Later
+              </button>
             </div>
           </div>
-        )}
-
-      </div>
+        </div>
+      )}
     </div>
   );
 };

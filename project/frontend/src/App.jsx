@@ -13,6 +13,9 @@ import Orders from './pages/Orders';
 import Profile from './pages/Profile';
 import Notifications from './pages/Notifications';
 import Admin from './pages/Admin';
+import Favorites from './pages/Favorites';
+import SellerProfile from './pages/SellerProfile';
+import SellerAnalytics from './pages/SellerAnalytics';
 
 // Protected Route wrapper component
 const ProtectedRoute = ({ children, allowedRoles = [] }) => {
@@ -95,6 +98,14 @@ const AppContent = () => {
               </ProtectedRoute>
             } 
           />
+          <Route 
+            path="/favorites" 
+            element={
+              <ProtectedRoute allowedRoles={['buyer']}>
+                <Favorites />
+              </ProtectedRoute>
+            } 
+          />
 
           {/* Protected Seller Routes */}
           <Route 
@@ -102,6 +113,14 @@ const AppContent = () => {
             element={
               <ProtectedRoute allowedRoles={['seller']}>
                 <SellerDashboard />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/seller-analytics" 
+            element={
+              <ProtectedRoute allowedRoles={['seller']}>
+                <SellerAnalytics />
               </ProtectedRoute>
             } 
           />
@@ -130,6 +149,14 @@ const AppContent = () => {
             element={
               <ProtectedRoute>
                 <Notifications />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/seller/:sellerId" 
+            element={
+              <ProtectedRoute>
+                <SellerProfile />
               </ProtectedRoute>
             } 
           />
