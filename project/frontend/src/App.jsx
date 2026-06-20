@@ -248,7 +248,7 @@ const AppContent = () => {
       <div className="absolute top-[35%] right-[20%] w-[30vw] h-[30vw] max-w-[400px] max-h-[400px] bg-tertiary-500/4 rounded-full blur-[100px] pointer-events-none z-0"></div>
 
       <Navbar />
-      <main className="flex-grow pb-28 md:pb-12 relative z-10">
+      <main className={`flex-grow pb-28 md:pb-12 relative z-10 ${!isAuthPage ? 'md:pl-64' : ''}`}>
         <Suspense fallback={<PageLoader />}>
         <Routes>
           {/* Public/Auth Route */}

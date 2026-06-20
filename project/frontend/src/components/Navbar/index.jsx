@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import Logo from '../Logo';
@@ -11,11 +11,10 @@ import {
   LogOut, 
   Menu, 
   X, 
-  ChefHat,
-  Sparkles,
   Compass,
   LayoutDashboard,
-  BarChart3
+  BarChart3,
+  Sparkles
 } from 'lucide-react';
 
 export const Navbar = () => {
@@ -23,6 +22,10 @@ export const Navbar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const isAuthPage = location.pathname === '/auth';
+
+  if (isAuthPage || !user) return null;
 
   const isActive = (path) => {
     if (path.includes('?')) {
@@ -41,123 +44,146 @@ export const Navbar = () => {
   };
 
   const navItems = [];
-  if (user) {
-    if (user.role === 'buyer') {
-      navItems.push({ label: 'Browse Food', path: '/', icon: Home });
-      navItems.push({ label: 'Explore Map', path: '/?map=true', icon: Compass });
-      navItems.push({ label: 'My Orders', path: '/orders', icon: ShoppingBag });
-      navItems.push({ label: 'Eco Impact', path: '/?showLedger=true', icon: Sparkles });
-    } else if (user.role === 'seller') {
-      navItems.push({ label: 'Dashboard', path: '/seller-dashboard', icon: LayoutDashboard });
-      navItems.push({ label: 'Orders', path: '/seller-dashboard?tab=orders', icon: ShoppingBag });
-      navItems.push({ label: 'Analytics', path: '/seller-analytics', icon: BarChart3 });
-    } else if (user.role === 'admin') {
-      navItems.push({ label: 'Admin Portal', path: '/admin', icon: ShieldAlert });
-    }
-    navItems.push({ label: 'Profile', path: '/profile', icon: User });
-    navItems.push({ label: 'Notifications', path: '/notifications', icon: Bell });
+  if (user.role === 'buyer') {
+    navItems.push({ label: 'Browse Food', path: '/', icon: Home });
+    navItems.push({ label: 'Explore Map', path: '/?map=true', icon: Compass });
+    navItems.push({ label: 'My Orders', path: '/orders', icon: ShoppingBag });
+    navItems.push({ label: 'Eco Impact', path: '/?showLedger=true', icon: Sparkles });
+  } else if (user.role === 'seller') {
+    navItems.push({ label: 'Dashboard', path: '/seller-dashboard', icon: LayoutDashboard });
+    navItems.push({ label: 'Orders', path: '/seller-dashboard?tab=orders', icon: ShoppingBag });
+    navItems.push({ label: 'Analytics', path: '/seller-analytics', icon: BarChart3 });
+  } else if (user.role === 'admin') {
+    navItems.push({ label: 'Admin Portal', path: '/admin', icon: ShieldAlert });
   }
+  navItems.push({ label: 'Profile', path: '/profile', icon: User });
+  navItems.push({ label: 'Notifications', path: '/notifications', icon: Bell });
 
   return (
-    <nav className="sticky top-0 z-50 glass-panel border-b border-white/10 px-4 py-3 md:px-8">
-      <div className="max-w-7xl mx-auto flex items-center justify-between">
-        {/* Logo */}
-        <Link to={user?.role === 'seller' ? '/seller-dashboard' : '/'} className="flex items-center space-x-2 hover:opacity-95 transition-opacity">
-          <Logo showAi={true} iconSize="w-9 h-9" textSize="text-xl" />
-        </Link>
+    <>
+      {/* ── DESKTOP SIDEBAR ───────────────────────────────────────────── */}
+      <aside className="hidden md:flex fixed top-0 left-0 bottom-0 w-64 bg-[#0b0c10]/60 backdrop-blur-xl border-r border-white/10 flex-col justify-between p-6 z-50">
+        <div className="space-y-6">
+          {/* Logo */}
+          <Link to={user.role === 'seller' ? '/seller-dashboard' : '/'} className="flex items-center space-x-2 px-2 hover:opacity-95 transition-opacity">
+            <Logo showAi={true} iconSize="w-9 h-9" textSize="text-xl" />
+          </Link>
 
-        {/* Desktop Navigation */}
-        <div className="hidden md:flex items-center space-x-6">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={`flex items-center space-x-1 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                  isActive(item.path)
-                    ? 'text-primary-500 bg-primary-500/10 border border-primary-500/20'
-                    : 'text-gray-300 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <Icon size={16} />
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
+          {/* User Profile Card */}
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary-500/10 border border-primary-500/20 flex items-center justify-center text-primary-500 shrink-0">
+              <User size={20} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <span className="text-sm font-black text-white block truncate">{user.name || 'User'}</span>
+              <span className="text-[9px] uppercase tracking-wider text-primary-500 font-extrabold px-1.5 py-0.5 bg-primary-500/15 border border-primary-500/20 rounded-md w-fit block mt-0.5">
+                {user.role}
+              </span>
+            </div>
+          </div>
 
-          {user ? (
-            <button
-              onClick={handleLogout}
-              className="flex items-center space-x-1 px-3 py-2 rounded-lg text-sm font-medium text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 transition-all duration-200 border border-transparent hover:border-rose-500/20"
-            >
-              <LogOut size={16} />
-              <span>Sign Out</span>
-            </button>
-          ) : (
-            <Link
-              to="/auth"
-              className="px-4 py-2 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-500 hover:to-primary-700 text-white rounded-lg text-sm font-semibold shadow-lg shadow-primary-500/10 hover:shadow-primary-500/20 transition-all duration-200"
-            >
-              Login / Register
-            </Link>
-          )}
+          {/* Navigation Links */}
+          <nav className="flex flex-col space-y-1.5 pt-2">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const active = isActive(item.path);
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={`flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-bold transition-all duration-300 ${
+                    active
+                      ? 'text-primary-500 bg-primary-500/10 border border-primary-500/20 shadow-md translate-x-1'
+                      : 'text-gray-400 hover:text-white hover:bg-white/5 hover:translate-x-0.5'
+                  }`}
+                >
+                  <Icon size={18} />
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </nav>
         </div>
 
-        {/* Mobile Menu Button */}
-        <button
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="md:hidden p-2 rounded-lg text-gray-300 hover:text-white hover:bg-white/5"
-        >
-          {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
-      </div>
+        {/* Logout Button */}
+        <div>
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-bold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 transition-all duration-300 border border-transparent hover:border-rose-500/20"
+          >
+            <LogOut size={18} />
+            <span>Sign Out</span>
+          </button>
+        </div>
+      </aside>
 
-      {/* Mobile Navigation Drawer */}
-      {mobileMenuOpen && (
-        <div className="md:hidden mt-3 pt-3 border-t border-white/10 flex flex-col space-y-2 animate-fade-in">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.path}
-                to={item.path}
-                onClick={() => setMobileMenuOpen(false)}
-                className={`flex items-center space-x-2 px-4 py-3 rounded-lg text-base font-medium transition-all ${
-                  isActive(item.path)
-                    ? 'text-primary-500 bg-primary-500/10 border border-primary-500/20'
-                    : 'text-gray-300 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <Icon size={18} />
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
+      {/* ── MOBILE TOP NAVBAR ─────────────────────────────────────────── */}
+      <nav className="md:hidden sticky top-0 z-50 glass-panel border-b border-white/10 px-4 py-3">
+        <div className="flex items-center justify-between">
+          {/* Logo */}
+          <Link to={user.role === 'seller' ? '/seller-dashboard' : '/'} className="flex items-center space-x-2 hover:opacity-95 transition-opacity">
+            <Logo showAi={true} iconSize="w-8 h-8" textSize="text-lg" />
+          </Link>
 
-          {user ? (
+          {/* Mobile Menu Button */}
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="p-2 rounded-lg text-gray-300 hover:text-white hover:bg-white/5 transition"
+          >
+            {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
+        </div>
+
+        {/* Mobile Navigation Drawer */}
+        {mobileMenuOpen && (
+          <div className="mt-3 pt-3 border-t border-white/10 flex flex-col space-y-2 animate-fade-in">
+            {/* Mobile User Tag */}
+            <div className="px-4 py-2 flex items-center gap-3 bg-white/5 rounded-xl border border-white/5 mb-1">
+              <div className="w-8 h-8 rounded-lg bg-primary-500/10 border border-primary-500/20 flex items-center justify-center text-primary-500">
+                <User size={16} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <span className="text-xs font-bold text-white block truncate">{user.name || 'User'}</span>
+                <span className="text-[8px] uppercase tracking-wider text-primary-500 font-extrabold px-1 py-0.2 bg-primary-500/15 border border-primary-500/20 rounded-md w-fit block mt-0.5">
+                  {user.role}
+                </span>
+              </div>
+            </div>
+
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const active = isActive(item.path);
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={`flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${
+                    active
+                      ? 'text-primary-500 bg-primary-500/10 border border-primary-500/20'
+                      : 'text-gray-300 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <Icon size={18} />
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+
             <button
               onClick={() => {
                 setMobileMenuOpen(false);
                 handleLogout();
               }}
-              className="flex items-center space-x-2 px-4 py-3 rounded-lg text-base font-medium text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 transition-all border border-transparent hover:border-rose-500/20"
+              className="flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-bold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 transition-all border border-transparent hover:border-rose-500/20"
             >
               <LogOut size={18} />
               <span>Sign Out</span>
             </button>
-          ) : (
-            <Link
-              to="/auth"
-              onClick={() => setMobileMenuOpen(false)}
-              className="flex items-center justify-center px-4 py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-lg text-base font-semibold"
-            >
-              Login / Register
-            </Link>
-          )}
-        </div>
-      )}
-    </nav>
+          </div>
+        )}
+      </nav>
+    </>
   );
 };
 
