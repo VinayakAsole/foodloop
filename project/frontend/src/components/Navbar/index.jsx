@@ -1,4 +1,4 @@
-import { useState, Fragment } from 'react';
+import { useState, Fragment, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import Logo from '../Logo';
@@ -22,7 +22,9 @@ import {
   Gift,
   AlertCircle,
   ClipboardList,
-  FileText
+  FileText,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 
 export const Navbar = ({ collapsed, setCollapsed }) => {
@@ -30,6 +32,17 @@ export const Navbar = ({ collapsed, setCollapsed }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(location.pathname.startsWith('/admin'));
+
+  useEffect(() => {
+    const checkAdmin = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      if (location.pathname.startsWith('/admin')) {
+        setAdminOpen(true);
+      }
+    };
+    checkAdmin();
+  }, [location.pathname]);
 
   const isAuthPage = location.pathname === '/auth';
 
@@ -130,6 +143,9 @@ export const Navbar = ({ collapsed, setCollapsed }) => {
                   {collapsed ? (
                     <Link
                       to={item.path}
+                      onClick={() => {
+                        if (item.subItems) setAdminOpen(!adminOpen);
+                      }}
                       title={item.label}
                       className={`flex items-center justify-center p-3.5 rounded-2xl transition-all duration-300 border ${
                         active
@@ -142,19 +158,27 @@ export const Navbar = ({ collapsed, setCollapsed }) => {
                   ) : (
                     <Link
                       to={item.path}
-                      className={`flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-bold transition-all duration-300 ${
+                      onClick={() => {
+                        if (item.subItems) setAdminOpen(!adminOpen);
+                      }}
+                      className={`flex items-center justify-between w-full px-4 py-3 rounded-xl text-sm font-bold transition-all duration-300 ${
                         active
                           ? 'text-primary-500 bg-primary-500/10 border border-primary-500/20 shadow-md translate-x-1'
                           : 'text-gray-400 hover:text-white hover:bg-white/5 hover:translate-x-0.5'
                       }`}
                     >
-                      <Icon size={18} />
-                      <span>{item.label}</span>
+                      <div className="flex items-center space-x-3 min-w-0">
+                        <Icon size={18} />
+                        <span>{item.label}</span>
+                      </div>
+                      {item.subItems && (
+                        adminOpen ? <ChevronUp size={14} className="text-gray-400 shrink-0" /> : <ChevronDown size={14} className="text-gray-400 shrink-0" />
+                      )}
                     </Link>
                   )}
 
-                  {/* Render subItems if they exist */}
-                  {item.subItems && (
+                  {/* Render subItems if they exist and sub-menu is toggled open */}
+                  {item.subItems && adminOpen && (
                     <div className={`flex flex-col space-y-1 ${collapsed ? 'pl-0 mt-1 mb-3' : 'pl-6 border-l border-white/5 ml-6 mt-1 mb-2'}`}>
                       {item.subItems.map((subItem) => {
                         const SubIcon = subItem.icon;
@@ -262,17 +286,28 @@ export const Navbar = ({ collapsed, setCollapsed }) => {
                 <Fragment key={item.path}>
                   <Link
                     to={item.path}
-                    onClick={() => setMobileMenuOpen(false)}
-                    className={`flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${
+                    onClick={() => {
+                      if (item.subItems) {
+                        setAdminOpen(!adminOpen);
+                      } else {
+                        setMobileMenuOpen(false);
+                      }
+                    }}
+                    className={`flex items-center justify-between w-full px-4 py-3 rounded-xl text-sm font-bold transition-all ${
                       active
                         ? 'text-primary-500 bg-primary-500/10 border border-primary-500/20'
                         : 'text-gray-300 hover:text-white hover:bg-white/5'
                     }`}
                   >
-                    <Icon size={18} />
-                    <span>{item.label}</span>
+                    <div className="flex items-center space-x-3">
+                      <Icon size={18} />
+                      <span>{item.label}</span>
+                    </div>
+                    {item.subItems && (
+                      adminOpen ? <ChevronUp size={14} className="text-gray-400 shrink-0" /> : <ChevronDown size={14} className="text-gray-400 shrink-0" />
+                    )}
                   </Link>
-                  {item.subItems && (
+                  {item.subItems && adminOpen && (
                     <div className="flex flex-col space-y-1 pl-6 border-l border-white/5 ml-6 mb-2">
                       {item.subItems.map((subItem) => {
                         const SubIcon = subItem.icon;
