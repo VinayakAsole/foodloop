@@ -97,6 +97,9 @@ const AppContent = () => {
   const [showEasterEgg, setShowEasterEgg] = useState(false);
   const [countdown, setCountdown] = useState(10);
 
+  // ── Sidebar collapse state ───────────────────────────────────────────
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
   useEffect(() => {
     const konamiCode = [
       'ArrowUp', 'ArrowUp', 
@@ -247,8 +250,10 @@ const AppContent = () => {
       <div className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] max-w-[600px] max-h-[600px] bg-secondary-500/8 rounded-full blur-[140px] pointer-events-none z-0"></div>
       <div className="absolute top-[35%] right-[20%] w-[30vw] h-[30vw] max-w-[400px] max-h-[400px] bg-tertiary-500/4 rounded-full blur-[100px] pointer-events-none z-0"></div>
 
-      <Navbar />
-      <main className={`flex-grow pb-28 md:pb-12 relative z-10 ${!isAuthPage ? 'md:pl-64' : ''}`}>
+      <Navbar collapsed={sidebarCollapsed} setCollapsed={setSidebarCollapsed} />
+      <main className={`flex-grow pb-28 md:pb-12 relative z-10 ${
+        !isAuthPage ? (sidebarCollapsed ? 'md:pl-20' : 'md:pl-64') : ''
+      } transition-all duration-300`}>
         <Suspense fallback={<PageLoader />}>
         <Routes>
           {/* Public/Auth Route */}

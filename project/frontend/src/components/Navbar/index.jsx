@@ -17,7 +17,7 @@ import {
   Sparkles
 } from 'lucide-react';
 
-export const Navbar = () => {
+export const Navbar = ({ collapsed, setCollapsed }) => {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -62,31 +62,63 @@ export const Navbar = () => {
   return (
     <>
       {/* ── DESKTOP SIDEBAR ───────────────────────────────────────────── */}
-      <aside className="hidden md:flex fixed top-0 left-0 bottom-0 w-64 bg-[#0b0c10]/60 backdrop-blur-xl border-r border-white/10 flex-col justify-between p-6 z-50">
+      <aside className={`hidden md:flex fixed top-0 left-0 bottom-0 bg-[#0b0c10]/60 backdrop-blur-xl border-r border-white/10 flex-col justify-between p-4 z-50 transition-all duration-300 ${collapsed ? 'w-20' : 'w-64'}`}>
         <div className="space-y-6">
-          {/* Logo */}
-          <Link to={user.role === 'seller' ? '/seller-dashboard' : '/'} className="flex items-center space-x-2 px-2 hover:opacity-95 transition-opacity">
-            <Logo showAi={true} iconSize="w-9 h-9" textSize="text-xl" />
-          </Link>
+          {/* Logo & Toggle Header */}
+          <div className="flex items-center justify-center px-1">
+            <button
+              onClick={() => setCollapsed(!collapsed)}
+              title={collapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+              className="flex items-center space-x-2 hover:opacity-95 transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer focus:outline-none min-w-0"
+            >
+              <Logo showAi={!collapsed} iconSize="w-9 h-9" textSize={collapsed ? 'hidden' : 'text-xl'} />
+            </button>
+          </div>
 
           {/* User Profile Card */}
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary-500/10 border border-primary-500/20 flex items-center justify-center text-primary-500 shrink-0">
-              <User size={20} />
+          {collapsed ? (
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-2.5 flex items-center justify-center cursor-pointer" title={`${user.name || 'User'} (${user.role})`}>
+              <div className="w-10 h-10 rounded-xl bg-primary-500/10 border border-primary-500/20 flex items-center justify-center text-primary-500 shrink-0">
+                <User size={20} />
+              </div>
             </div>
-            <div className="min-w-0 flex-1">
-              <span className="text-sm font-black text-white block truncate">{user.name || 'User'}</span>
-              <span className="text-[9px] uppercase tracking-wider text-primary-500 font-extrabold px-1.5 py-0.5 bg-primary-500/15 border border-primary-500/20 rounded-md w-fit block mt-0.5">
-                {user.role}
-              </span>
+          ) : (
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-primary-500/10 border border-primary-500/20 flex items-center justify-center text-primary-500 shrink-0">
+                <User size={20} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <span className="text-sm font-black text-white block truncate">{user.name || 'User'}</span>
+                <span className="text-[9px] uppercase tracking-wider text-primary-500 font-extrabold px-1.5 py-0.5 bg-primary-500/15 border border-primary-500/20 rounded-md w-fit block mt-0.5">
+                  {user.role}
+                </span>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Navigation Links */}
           <nav className="flex flex-col space-y-1.5 pt-2">
             {navItems.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.path);
+              
+              if (collapsed) {
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    title={item.label}
+                    className={`flex items-center justify-center p-3.5 rounded-2xl transition-all duration-300 border ${
+                      active
+                        ? 'text-primary-500 bg-primary-500/10 border-primary-500/20 shadow-md scale-105'
+                        : 'text-gray-400 hover:text-white hover:bg-white/5 hover:scale-105 border-transparent'
+                    }`}
+                  >
+                    <Icon size={20} />
+                  </Link>
+                );
+              }
+
               return (
                 <Link
                   key={item.path}
@@ -107,13 +139,23 @@ export const Navbar = () => {
 
         {/* Logout Button */}
         <div>
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-bold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 transition-all duration-300 border border-transparent hover:border-rose-500/20"
-          >
-            <LogOut size={18} />
-            <span>Sign Out</span>
-          </button>
+          {collapsed ? (
+            <button
+              onClick={handleLogout}
+              title="Sign Out"
+              className="w-full flex items-center justify-center p-3.5 rounded-2xl text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 transition-all duration-300 border border-transparent hover:border-rose-500/20"
+            >
+              <LogOut size={20} />
+            </button>
+          ) : (
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-bold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 transition-all duration-300 border border-transparent hover:border-rose-500/20"
+            >
+              <LogOut size={18} />
+              <span>Sign Out</span>
+            </button>
+          )}
         </div>
       </aside>
 
