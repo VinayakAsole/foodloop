@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, Fragment } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import Logo from '../Logo';
@@ -14,7 +14,15 @@ import {
   Compass,
   LayoutDashboard,
   BarChart3,
-  Sparkles
+  Sparkles,
+  UserCheck,
+  MapPin,
+  Users,
+  UserX,
+  Gift,
+  AlertCircle,
+  ClipboardList,
+  FileText
 } from 'lucide-react';
 
 export const Navbar = ({ collapsed, setCollapsed }) => {
@@ -54,7 +62,22 @@ export const Navbar = ({ collapsed, setCollapsed }) => {
     navItems.push({ label: 'Orders', path: '/seller-dashboard?tab=orders', icon: ShoppingBag });
     navItems.push({ label: 'Analytics', path: '/seller-analytics', icon: BarChart3 });
   } else if (user.role === 'admin') {
-    navItems.push({ label: 'Admin Portal', path: '/admin', icon: ShieldAlert });
+    navItems.push({ 
+      label: 'Admin Portal', 
+      path: '/admin', 
+      icon: ShieldAlert,
+      subItems: [
+        { label: 'Pending Approval', path: '/admin?tab=registrations', icon: UserCheck },
+        { label: 'Location Changes', path: '/admin?tab=relocations', icon: MapPin },
+        { label: 'All Users', path: '/admin?tab=users', icon: Users },
+        { label: 'Trust Watchlist', path: '/admin?tab=watchlist', icon: UserX },
+        { label: 'Analytics', path: '/admin?tab=analytics', icon: BarChart3 },
+        { label: 'Coupons', path: '/admin?tab=coupons', icon: Gift },
+        { label: 'Disputes', path: '/admin?tab=disputes', icon: AlertCircle },
+        { label: 'Audit Log', path: '/admin?tab=audit', icon: ClipboardList },
+        { label: 'Reports', path: '/admin?tab=reports', icon: FileText },
+      ]
+    });
   }
   navItems.push({ label: 'Profile', path: '/profile', icon: User });
   navItems.push({ label: 'Notifications', path: '/notifications', icon: Bell });
@@ -102,36 +125,76 @@ export const Navbar = ({ collapsed, setCollapsed }) => {
               const Icon = item.icon;
               const active = isActive(item.path);
               
-              if (collapsed) {
-                return (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    title={item.label}
-                    className={`flex items-center justify-center p-3.5 rounded-2xl transition-all duration-300 border ${
-                      active
-                        ? 'text-primary-500 bg-primary-500/10 border-primary-500/20 shadow-md scale-105'
-                        : 'text-gray-400 hover:text-white hover:bg-white/5 hover:scale-105 border-transparent'
-                    }`}
-                  >
-                    <Icon size={20} />
-                  </Link>
-                );
-              }
-
               return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={`flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-bold transition-all duration-300 ${
-                    active
-                      ? 'text-primary-500 bg-primary-500/10 border border-primary-500/20 shadow-md translate-x-1'
-                      : 'text-gray-400 hover:text-white hover:bg-white/5 hover:translate-x-0.5'
-                  }`}
-                >
-                  <Icon size={18} />
-                  <span>{item.label}</span>
-                </Link>
+                <Fragment key={item.path}>
+                  {collapsed ? (
+                    <Link
+                      to={item.path}
+                      title={item.label}
+                      className={`flex items-center justify-center p-3.5 rounded-2xl transition-all duration-300 border ${
+                        active
+                          ? 'text-primary-500 bg-primary-500/10 border-primary-500/20 shadow-md scale-105'
+                          : 'text-gray-400 hover:text-white hover:bg-white/5 hover:scale-105 border-transparent'
+                      }`}
+                    >
+                      <Icon size={20} />
+                    </Link>
+                  ) : (
+                    <Link
+                      to={item.path}
+                      className={`flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-bold transition-all duration-300 ${
+                        active
+                          ? 'text-primary-500 bg-primary-500/10 border border-primary-500/20 shadow-md translate-x-1'
+                          : 'text-gray-400 hover:text-white hover:bg-white/5 hover:translate-x-0.5'
+                      }`}
+                    >
+                      <Icon size={18} />
+                      <span>{item.label}</span>
+                    </Link>
+                  )}
+
+                  {/* Render subItems if they exist */}
+                  {item.subItems && (
+                    <div className={`flex flex-col space-y-1 ${collapsed ? 'pl-0 mt-1 mb-3' : 'pl-6 border-l border-white/5 ml-6 mt-1 mb-2'}`}>
+                      {item.subItems.map((subItem) => {
+                        const SubIcon = subItem.icon;
+                        const subActive = isActive(subItem.path);
+                        
+                        if (collapsed) {
+                          return (
+                            <Link
+                              key={subItem.path}
+                              to={subItem.path}
+                              title={subItem.label}
+                              className={`flex items-center justify-center p-2 rounded-xl transition-all duration-300 border ${
+                                subActive
+                                  ? 'text-primary-500 bg-primary-500/5 border-primary-500/10 shadow-sm scale-105'
+                                  : 'text-gray-500 hover:text-white hover:bg-white/5 hover:scale-105 border-transparent'
+                              }`}
+                            >
+                              <SubIcon size={16} />
+                            </Link>
+                          );
+                        }
+                        
+                        return (
+                          <Link
+                            key={subItem.path}
+                            to={subItem.path}
+                            className={`flex items-center space-x-2.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-300 ${
+                              subActive
+                                ? 'text-primary-500 bg-primary-500/5 border border-primary-500/10 shadow-sm'
+                                : 'text-gray-400 hover:text-white hover:bg-white/5'
+                            }`}
+                          >
+                            <SubIcon size={14} />
+                            <span>{subItem.label}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+                </Fragment>
               );
             })}
           </nav>
@@ -196,19 +259,43 @@ export const Navbar = ({ collapsed, setCollapsed }) => {
               const Icon = item.icon;
               const active = isActive(item.path);
               return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={`flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${
-                    active
-                      ? 'text-primary-500 bg-primary-500/10 border border-primary-500/20'
-                      : 'text-gray-300 hover:text-white hover:bg-white/5'
-                  }`}
-                >
-                  <Icon size={18} />
-                  <span>{item.label}</span>
-                </Link>
+                <Fragment key={item.path}>
+                  <Link
+                    to={item.path}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${
+                      active
+                        ? 'text-primary-500 bg-primary-500/10 border border-primary-500/20'
+                        : 'text-gray-300 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <Icon size={18} />
+                    <span>{item.label}</span>
+                  </Link>
+                  {item.subItems && (
+                    <div className="flex flex-col space-y-1 pl-6 border-l border-white/5 ml-6 mb-2">
+                      {item.subItems.map((subItem) => {
+                        const SubIcon = subItem.icon;
+                        const subActive = isActive(subItem.path);
+                        return (
+                          <Link
+                            key={subItem.path}
+                            to={subItem.path}
+                            onClick={() => setMobileMenuOpen(false)}
+                            className={`flex items-center space-x-2.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
+                              subActive
+                                ? 'text-primary-500 bg-primary-500/5 border-primary-500/10'
+                                : 'text-gray-400 hover:text-white hover:bg-white/5'
+                            }`}
+                          >
+                            <SubIcon size={14} />
+                            <span>{subItem.label}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+                </Fragment>
               );
             })}
 

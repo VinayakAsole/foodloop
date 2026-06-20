@@ -1,13 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import MapView from '../../components/MapView';
 import { 
-  Users, 
   ShieldCheck, 
   FileText, 
-  UserX,
   AlertCircle,
-  TrendingUp,
   Gift,
   RefreshCw,
   FileSpreadsheet,
@@ -91,23 +89,104 @@ const formatDate = (dateVal, includeTime = false) => {
       return dateObj.toLocaleDateString('en-IN');
     }
     return dateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-  } catch (err) {
+  } catch {
     return 'N/A';
   }
+};
+
+const SVGBarChart = ({ data, labels, color = 'primary', height = 150 }) => {
+  const max = Math.max(...data, 1);
+  const chartWidth = data.length * 60;
+  const colors = {
+    primary: { fill: 'url(#grad-primary)', text: '#FF6B35' },
+    secondary: { fill: 'url(#grad-secondary)', text: '#2EC4B6' }
+  };
+  const activeColor = colors[color] || colors.primary;
+
+  return (
+    <div className="w-full overflow-x-auto">
+      <svg viewBox={`0 0 ${chartWidth} ${height + 40}`} className="w-full min-w-[350px]" style={{ height: height + 40 }}>
+        <defs>
+          <linearGradient id="grad-primary" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#FF6B35" stopOpacity="0.8" />
+            <stop offset="100%" stopColor="#FF6B35" stopOpacity="0.1" />
+          </linearGradient>
+          <linearGradient id="grad-secondary" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#2EC4B6" stopOpacity="0.8" />
+            <stop offset="100%" stopColor="#2EC4B6" stopOpacity="0.1" />
+          </linearGradient>
+        </defs>
+
+        {data.map((val, i) => {
+          const barHeight = (val / max) * height;
+          const x = i * 60 + 20;
+          const y = height - barHeight + 20;
+
+          return (
+            <g key={i} className="group cursor-pointer">
+              {/* Bar Value Tooltip */}
+              <text
+                x={x + 15}
+                y={y - 6}
+                fill="#ffffff"
+                fontSize="10"
+                fontWeight="bold"
+                textAnchor="middle"
+                className="opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+              >
+                {val}
+              </text>
+
+              {/* Bar */}
+              <rect
+                x={x}
+                y={y}
+                width="30"
+                height={barHeight}
+                fill={activeColor.fill}
+                rx="4"
+                className="transition-all duration-300 hover:brightness-125"
+              />
+
+              {/* X Axis Label */}
+              <text
+                x={x + 15}
+                y={height + 35}
+                fill="#94A3B8"
+                fontSize="10"
+                fontWeight="bold"
+                textAnchor="middle"
+              >
+                {labels[i]}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
 };
 
 export const Admin = () => {
   const { user } = useAuth();
   const [users, setUsers]               = useState([]);
   const [loading, setLoading]           = useState(true);
-  const [activeTab, setActiveTab]       = useState('registrations');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') || 'registrations';
+  const setActiveTab = (tabKey) => {
+    setSearchParams({ tab: tabKey });
+  };
   const [searchQuery, setSearchQuery]   = useState('');
   const [selectedRoleFilter, setSelectedRoleFilter] = useState(null);
   const [relocations, setRelocations]   = useState([]);
 
   useEffect(() => {
-    setSelectedRoleFilter(null);
-    setSearchQuery('');
+    const resetFilters = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      setSelectedRoleFilter(null);
+      setSearchQuery('');
+    };
+    resetFilters();
   }, [activeTab]);
 
   // Load all user records from Firestore
@@ -143,8 +222,12 @@ export const Admin = () => {
   };
 
   useEffect(() => { 
-    loadUsersData(); 
-    loadRelocationsData();
+    const init = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      loadUsersData(); 
+      loadRelocationsData();
+    };
+    init();
   }, []);
 
   const handleVerifySeller = async (uid, approve = true) => {
@@ -304,11 +387,15 @@ export const Admin = () => {
   };
 
   useEffect(() => {
-    if (activeTab === 'analytics') loadAnalyticsData();
-    if (activeTab === 'coupons') loadCouponsData();
-    if (activeTab === 'audit') loadAuditLogsData();
-    if (activeTab === 'disputes') loadDisputesData();
-    if (activeTab === 'relocations') loadRelocationsData();
+    const loadTab = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      if (activeTab === 'analytics') loadAnalyticsData();
+      if (activeTab === 'coupons') loadCouponsData();
+      if (activeTab === 'audit') loadAuditLogsData();
+      if (activeTab === 'disputes') loadDisputesData();
+      if (activeTab === 'relocations') loadRelocationsData();
+    };
+    loadTab();
   }, [activeTab]);
 
   // Load disputes count on mount for badges
@@ -317,7 +404,9 @@ export const Admin = () => {
       try {
         const dList = await getDisputes();
         setDisputes(dList);
-      } catch (e) {}
+      } catch (err) {
+        console.error(err);
+      }
     };
     fetchCounts();
   }, []);
@@ -394,92 +483,6 @@ export const Admin = () => {
   };
 
   const chartsData = getAnalyticsChartsData();
-
-  const SVGBarChart = ({ data, labels, color = 'primary', height = 150 }) => {
-    const max = Math.max(...data, 1);
-    const chartWidth = data.length * 60;
-    const colors = {
-      primary: { fill: 'url(#grad-primary)', text: '#FF6B35' },
-      secondary: { fill: 'url(#grad-secondary)', text: '#2EC4B6' }
-    };
-    const activeColor = colors[color] || colors.primary;
-
-    return (
-      <div className="w-full overflow-x-auto">
-        <svg viewBox={`0 0 ${chartWidth} ${height + 40}`} className="w-full min-w-[350px]" style={{ height: height + 40 }}>
-          <defs>
-            <linearGradient id="grad-primary" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#FF6B35" />
-              <stop offset="100%" stopColor="#be3d13" stopOpacity="0.4" />
-            </linearGradient>
-            <linearGradient id="grad-secondary" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#2EC4B6" />
-              <stop offset="100%" stopColor="#20a89c" stopOpacity="0.4" />
-            </linearGradient>
-          </defs>
-          {[0.25, 0.5, 0.75, 1].map((ratio) => (
-            <line
-              key={ratio}
-              x1="0"
-              y1={height - ratio * height}
-              x2={chartWidth}
-              y2={height - ratio * height}
-              stroke="rgba(255,255,255,0.05)"
-              strokeWidth="1"
-            />
-          ))}
-          {data.map((val, i) => {
-            const barHeight = (val / max) * height;
-            const x = i * 60 + 15;
-            const y = height - barHeight;
-            return (
-              <g key={i} className="group">
-                <rect
-                  x={x - 5}
-                  y={y - 25}
-                  width="40"
-                  height="18"
-                  rx="4"
-                  fill="#16192b"
-                  className="opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                />
-                <text
-                  x={x + 15}
-                  y={y - 12}
-                  fill="#fff"
-                  fontSize="10"
-                  fontWeight="black"
-                  textAnchor="middle"
-                  className="opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                >
-                  {val}
-                </text>
-                <rect
-                  x={x}
-                  y={y}
-                  width="30"
-                  height={barHeight}
-                  rx="4"
-                  fill={activeColor.fill}
-                  className="transition-all duration-300 hover:brightness-110 cursor-pointer"
-                />
-                <text
-                  x={x + 15}
-                  y={height + 18}
-                  fill="rgba(255,255,255,0.4)"
-                  fontSize="10"
-                  fontWeight="bold"
-                  textAnchor="middle"
-                >
-                  {labels[i]}
-                </text>
-              </g>
-            );
-          })}
-        </svg>
-      </div>
-    );
-  };
 
   // Search filter for "all users" tab
   const q = searchQuery.toLowerCase();
