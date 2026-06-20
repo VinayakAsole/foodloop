@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getAvailableFoods } from '../../firebase/firestore';
 import { useAuth } from '../../hooks/useAuth';
+import { fetchIPLocation } from '../../utils/geolocationFallback';
 import FoodCard from '../../components/FoodCard';
 import MapView from '../../components/MapView';
 import EcoImpactWidget from '../../components/EcoImpactWidget';
@@ -103,48 +104,93 @@ export const Home = () => {
 
   const [showLocationModal, setShowLocationModal] = useState(false);
 
-  const requestGeoLocation = () => {
-    if (user && 'geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const { latitude, longitude } = position.coords;
-          console.log("Device GPS Coordinates acquired:", latitude, longitude);
-          
-          // Sync memory state
-          if (updateProfileState) {
-            updateProfileState({ latitude, longitude });
-          }
-          
-          // Sync persistent Firestore profile
-          try {
-            await updateDoc(doc(db, 'users', user.uid), {
-              latitude,
-              longitude
-            });
-            console.log("Updated device coordinates in Firestore user profile.");
-          } catch (err) {
-            console.error("Failed to update coordinates in Firestore profile:", err);
-          }
-          setShowLocationModal(false);
-        },
-        (error) => {
-          console.warn("Geolocation permission denied/unavailable. Using profile or fallback:", error.message);
-          setShowLocationModal(false);
-        },
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
-      );
-    } else {
+  const requestGeoLocation = async () => {
+    if (!user) {
       setShowLocationModal(false);
+      return;
     }
+
+    const handleIPFallback = async (gpsErrorMsg) => {
+      console.warn(`${gpsErrorMsg}. Trying IP geolocation fallback...`);
+      const ipCoords = await fetchIPLocation();
+      if (ipCoords) {
+        const { latitude, longitude } = ipCoords;
+        if (updateProfileState) {
+          updateProfileState({ latitude, longitude });
+        }
+        try {
+          const updates = { latitude, longitude };
+          await updateDoc(doc(db, 'users', user.uid), updates);
+          if (user.role === 'buyer') {
+            await updateDoc(doc(db, 'buyers', user.uid), updates).catch(() => {});
+          } else if (user.role === 'seller') {
+            await updateDoc(doc(db, 'sellers', user.uid), updates).catch(() => {});
+          }
+          console.log("Updated IP-based coordinates in Firestore user profile.");
+        } catch (err) {
+          console.error("Failed to update IP-based coordinates in Firestore:", err);
+        }
+      }
+      setShowLocationModal(false);
+    };
+
+    const isSecure = window.location.protocol === 'https:' || 
+                     window.location.hostname === 'localhost' || 
+                     window.location.hostname === '127.0.0.1';
+
+    if (!('geolocation' in navigator) || !isSecure) {
+      await handleIPFallback(!isSecure ? 'Geolocation requires a secure context (HTTPS/localhost)' : 'Geolocation not supported by browser');
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        console.log("Device GPS Coordinates acquired:", latitude, longitude);
+        
+        // Sync memory state
+        if (updateProfileState) {
+          updateProfileState({ latitude, longitude });
+        }
+        
+        // Sync persistent Firestore profile
+        try {
+          const updates = { latitude, longitude };
+          await updateDoc(doc(db, 'users', user.uid), updates);
+          if (user.role === 'buyer') {
+            await updateDoc(doc(db, 'buyers', user.uid), updates).catch(() => {});
+          } else if (user.role === 'seller') {
+            await updateDoc(doc(db, 'sellers', user.uid), updates).catch(() => {});
+          }
+          console.log("Updated device coordinates in Firestore user profile.");
+        } catch (err) {
+          console.error("Failed to update coordinates in Firestore profile:", err);
+        }
+        setShowLocationModal(false);
+      },
+      async (error) => {
+        let errorMessage = 'Failed to fetch location';
+        if (error.code === 1) errorMessage = 'Location access denied by user';
+        else if (error.code === 2) errorMessage = 'Location unavailable';
+        else if (error.code === 3) errorMessage = 'Location fetch timeout';
+        await handleIPFallback(errorMessage);
+      },
+      { enableHighAccuracy: true, timeout: 6000, maximumAge: 30000 }
+    );
   };
 
-  // Check browser geolocation permission status to decide if we show the custom modal
+  // Check browser geolocation permission status to decide if we show the custom modal or trigger fallbacks
   useEffect(() => {
     if (!user) return;
 
     const checkLocationPermission = async () => {
       // Only prompt for buyer role
       if (user.role !== 'buyer') return;
+
+      const latVal = parseFloat(user.latitude || 0);
+      const lngVal = parseFloat(user.longitude || 0);
+      const isDefaultMumbai = Math.abs(latVal - 19.076) < 0.01 && Math.abs(lngVal - 72.8777) < 0.01;
+      const needsUpdate = latVal === 0 || lngVal === 0 || isDefaultMumbai;
 
       if ('permissions' in navigator) {
         try {
@@ -154,6 +200,9 @@ export const Home = () => {
             setShowLocationModal(true);
           } else if (result.state === 'granted') {
             // Already granted, fetch coordinates automatically
+            requestGeoLocation();
+          } else if (result.state === 'denied' && needsUpdate) {
+            // Permission denied but coordinates are default/empty, auto-fetch IP location fallback
             requestGeoLocation();
           }
           
@@ -165,17 +214,24 @@ export const Home = () => {
             }
           };
         } catch (err) {
-          console.warn("Permissions API not supported or failed. Showing location modal by default:", err);
-          setShowLocationModal(true);
+          console.warn("Permissions API not supported or failed. Checking needsUpdate:", err);
+          if (needsUpdate) {
+            requestGeoLocation();
+          } else {
+            setShowLocationModal(true);
+          }
         }
       } else {
-        // Fallback for older browsers
-        setShowLocationModal(true);
+        if (needsUpdate) {
+          requestGeoLocation();
+        } else {
+          setShowLocationModal(true);
+        }
       }
     };
 
     checkLocationPermission();
-  }, [user?.uid, user?.role]);
+  }, [user?.uid, user?.role, user?.latitude, user?.longitude]);
 
   // Real-time Firestore active foods listener
   useEffect(() => {
@@ -380,17 +436,32 @@ export const Home = () => {
 
       {/* Radius Distance Slider */}
       {userCoords && (
-        <div className="glass-panel px-4 py-3 rounded-xl border border-white/5 flex items-center space-x-4">
-          <MapPin size={16} className="text-secondary-500 shrink-0" />
-          <span className="text-xs text-gray-300 whitespace-nowrap">Distance Radius: <strong className="text-white">{maxDistance} km</strong></span>
-          <input
-            type="range"
-            min="1"
-            max="30"
-            value={maxDistance}
-            onChange={(e) => setMaxDistance(parseInt(e.target.value))}
-            className="w-full accent-primary-500 h-1 bg-white/10 rounded-lg cursor-pointer"
-          />
+        <div className="glass-panel px-4 py-3 rounded-xl border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center space-x-4 flex-grow">
+            <MapPin size={16} className="text-secondary-500 shrink-0" />
+            <span className="text-xs text-gray-300 whitespace-nowrap">Distance Radius: <strong className="text-white">{maxDistance} km</strong></span>
+            <input
+              type="range"
+              min="1"
+              max="30"
+              value={maxDistance}
+              onChange={(e) => setMaxDistance(parseInt(e.target.value))}
+              className="w-full accent-primary-500 h-1 bg-white/10 rounded-lg cursor-pointer"
+            />
+          </div>
+          <div className="flex items-center justify-between sm:justify-end gap-2.5 border-t sm:border-t-0 border-white/5 pt-2.5 sm:pt-0 shrink-0">
+            <span className="text-[10px] text-gray-400 font-mono">
+              📍 {userCoords.latitude.toFixed(5)}, {userCoords.longitude.toFixed(5)}
+            </span>
+            <button
+              onClick={requestGeoLocation}
+              className="px-2.5 py-1 bg-white/5 hover:bg-white/10 text-[10px] font-semibold text-primary-500 hover:text-primary-400 border border-white/10 hover:border-primary-500/30 rounded-lg transition-all cursor-pointer flex items-center gap-1"
+              title="Recalculate location coordinates"
+            >
+              <RefreshCw size={10} />
+              <span>Refresh Location</span>
+            </button>
+          </div>
         </div>
       )}
 

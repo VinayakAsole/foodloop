@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { fetchIPLocation } from '../utils/geolocationFallback';
 
 // Default fallback coordinates (Mumbai, India) if user blocks location services
 const DEFAULT_COORDS = {
@@ -13,10 +14,34 @@ export const useGeolocation = (autoFetch = false) => {
 
   const getCoordinates = () => {
     return new Promise((resolve) => {
+      const handleIPFallback = async (gpsErrorMsg) => {
+        setError(`${gpsErrorMsg}. Trying IP geolocation...`);
+        const ipCoords = await fetchIPLocation();
+        if (ipCoords) {
+          setCoords(ipCoords);
+          setError(null);
+          setLoading(false);
+          resolve(ipCoords);
+        } else {
+          setError(`${gpsErrorMsg}. IP geolocation fallback also failed.`);
+          setCoords(DEFAULT_COORDS);
+          setLoading(false);
+          resolve(DEFAULT_COORDS);
+        }
+      };
+
       if (typeof window === 'undefined' || !('geolocation' in navigator)) {
-        setError('Geolocation is not supported by your browser');
-        setCoords(DEFAULT_COORDS);
-        resolve(DEFAULT_COORDS);
+        handleIPFallback('Geolocation is not supported by your browser');
+        return;
+      }
+
+      // Check if we are in secure context, otherwise getCurrentPosition will fail silently or reject on many mobile browsers
+      const isSecure = window.location.protocol === 'https:' || 
+                       window.location.hostname === 'localhost' || 
+                       window.location.hostname === '127.0.0.1';
+
+      if (!isSecure) {
+        handleIPFallback('Geolocation requires a secure context (HTTPS/localhost)');
         return;
       }
 
@@ -38,13 +63,9 @@ export const useGeolocation = (autoFetch = false) => {
           else if (err.code === 2) errorMessage = 'Location unavailable';
           else if (err.code === 3) errorMessage = 'Location fetch timeout';
           
-          setError(errorMessage);
-          setCoords(DEFAULT_COORDS);
-          setLoading(false);
-          // Return default location on failure so the app doesn't break
-          resolve(DEFAULT_COORDS);
+          handleIPFallback(errorMessage);
         },
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 6000, maximumAge: 0 }
       );
     });
   };

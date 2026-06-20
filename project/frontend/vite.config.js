@@ -23,6 +23,30 @@ export default defineConfig({
       overlay: true,
     }
   },
+  build: {
+    target: 'es2020',
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom') || id.includes('@remix-run')) {
+              return 'vendor-react';
+            }
+            if (id.includes('firebase')) {
+              return 'vendor-firebase';
+            }
+            if (id.includes('leaflet') || id.includes('react-leaflet')) {
+              return 'vendor-map';
+            }
+            if (id.includes('lucide-react') || id.includes('canvas-confetti')) {
+              return 'vendor-ui';
+            }
+            return 'vendor';
+          }
+        }
+      }
+    }
+  },
   optimizeDeps: {
     include: [
       'react',
@@ -38,3 +62,4 @@ export default defineConfig({
     ]
   }
 })
+

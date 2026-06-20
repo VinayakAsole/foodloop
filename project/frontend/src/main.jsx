@@ -9,11 +9,19 @@ createRoot(document.getElementById('root')).render(
   </StrictMode>,
 )
 
-// Register PWA Service Worker
+// Defer PWA Service Worker registration until browser is idle
+// This prevents SW installation from competing with initial page rendering
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
+  const registerSW = () => {
     navigator.serviceWorker.register('/sw.js')
       .then((reg) => console.log('PWA Service Worker active:', reg.scope))
       .catch((err) => console.error('PWA Service Worker failed:', err));
-  });
+  };
+
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(registerSW);
+  } else {
+    setTimeout(registerSW, 2000);
+  }
 }
+

@@ -101,9 +101,11 @@ export const getAvailableFoods = async () => {
 };
 
 export const getSellerFoods = async (sellerId) => {
+  console.log("[Firestore getSellerFoods] Fetching foods for sellerId:", sellerId);
   const querySnapshot = await getDocs(
     query(collection(db, 'foods'), where('sellerId', '==', sellerId))
   );
+  console.log("[Firestore getSellerFoods] Found raw documents count:", querySnapshot.size);
   const now = new Date();
   const list = [];
   const updatePromises = [];

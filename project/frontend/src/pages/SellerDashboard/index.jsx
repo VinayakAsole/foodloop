@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { 
   getSellerFoods, 
@@ -18,8 +18,9 @@ import KitchenToggle from '../../components/KitchenToggle';
 import OTPModal from '../../components/OTPModal';
 import TrustScore from '../../components/TrustScore';
 import LocationPickerMap from '../../components/LocationPickerMap';
-import { onSnapshot, collection, query, where } from 'firebase/firestore';
+import { onSnapshot, collection, query, where, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
+import { fetchIPLocation } from '../../utils/geolocationFallback';
 import { subscribeToChat } from '../../firebase/rtdb';
 import ChatDrawer from '../../components/ChatDrawer';
 import TiltCard from '../../components/TiltCard';
@@ -27,6 +28,8 @@ import {
   Plus, 
   TrendingUp, 
   ShoppingBag, 
+  LayoutDashboard,
+  BarChart3, 
   Gift, 
   Trash2, 
   Sparkles, 
@@ -74,8 +77,46 @@ const resizeImage = (file, maxWidth = 450) =>
 const CATEGORY_PRICES = { Breakfast: 30, Lunch: 60, Dinner: 70, Snacks: 35 };
 
 export const SellerDashboard = () => {
-  const { user } = useAuth();
+  const { user, updateProfileState } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
+
+  // Auto-upgrade seller coordinates if they are default Mumbai or empty/0
+  useEffect(() => {
+    if (!user) return;
+
+    const checkAndUpgradeLocation = async () => {
+      const latVal = parseFloat(user.latitude || 0);
+      const lngVal = parseFloat(user.longitude || 0);
+      const isDefaultMumbai = Math.abs(latVal - 19.076) < 0.01 && Math.abs(lngVal - 72.8777) < 0.01;
+      const needsUpdate = latVal === 0 || lngVal === 0 || isDefaultMumbai;
+
+      if (needsUpdate) {
+        console.log("Seller coordinates are default/empty. Upgrading seller location via IP fallback...");
+        const ipCoords = await fetchIPLocation();
+        if (ipCoords) {
+          const { latitude, longitude } = ipCoords;
+          try {
+            const updates = { latitude, longitude };
+            // Update Firestore user document
+            await updateDoc(doc(db, 'users', user.uid), updates);
+            // Update Firestore seller document
+            await updateDoc(doc(db, 'sellers', user.uid), updates).catch(() => {});
+            
+            // Sync memory state
+            if (updateProfileState) {
+              updateProfileState(updates);
+            }
+            console.log("Seller coordinates successfully upgraded to IP location.");
+          } catch (err) {
+            console.error("Failed to upgrade seller location:", err);
+          }
+        }
+      }
+    };
+
+    checkAndUpgradeLocation();
+  }, [user?.uid, user?.latitude, user?.longitude]);
+
   const activeTab = searchParams.get('tab') || 'dashboard'; // 'dashboard' or 'orders'
   const [foods, setFoods]             = useState([]);
   const [orders, setOrders]           = useState([]);
@@ -100,6 +141,7 @@ export const SellerDashboard = () => {
 
   // ── Location ─────────────────────────────────────────────────────────
   const [pickedLocation, setPickedLocation] = useState(null);
+  const [resolvedAddress, setResolvedAddress] = useState(null);
 
   // ── AI hint (non-blocking, purely cosmetic) ──────────────────────────
   const [aiLoading, setAiLoading]           = useState(false);
@@ -179,8 +221,8 @@ export const SellerDashboard = () => {
     setImagePreview(null);
     if (foodItem.location) {
       setPickedLocation({
-        lat: foodItem.location.latitude,
-        lng: foodItem.location.longitude
+        latitude: foodItem.location.latitude,
+        longitude: foodItem.location.longitude
       });
     }
   };
@@ -216,22 +258,28 @@ export const SellerDashboard = () => {
 
   // ─── Load seller data ─────────────────────────────────────────────────
   const loadSellerData = async () => {
-    if (!user) return;
+    if (!user) {
+      console.warn("[SellerDashboard loadSellerData] Skipped: user is null/undefined");
+      return;
+    }
+    console.log("[SellerDashboard loadSellerData] Loading dashboard data for seller UID:", user.uid);
     setLoading(true);
     try {
       // Still load foods manually
       const foodsData = await getSellerFoods(user.uid);
+      console.log("[SellerDashboard loadSellerData] Fetched foods count:", foodsData.length, "Foods:", foodsData);
       setFoods(foodsData);
       
       // Load orders initially
       const ordersData = await getSellerOrders(user.uid);
+      console.log("[SellerDashboard loadSellerData] Fetched orders count:", ordersData.length);
       setOrders(ordersData);
 
       // Load announcements
       const annData = await getSellerAnnouncements(user.uid);
       setAnnouncements(annData);
     } catch (e) {
-      console.error('loadSellerData error:', e);
+      console.error('[SellerDashboard loadSellerData] loadSellerData error:', e);
     } finally {
       setLoading(false);
     }
@@ -331,13 +379,47 @@ export const SellerDashboard = () => {
     setFoodImage(null);
     setImagePreview(null);
     setPickedLocation(null);
+    setResolvedAddress(null);
     setAiMessage(null);
     setAiLoading(false);
     setPriceRecommendation(null);
     setSubmitError(null);
   };
 
-  const openForm = () => { resetForm(); setShowAddForm(true); };
+  const openForm = async () => {
+    resetForm();
+    setShowAddForm(true);
+
+    const isSecure = window.location.protocol === 'https:' || 
+                     window.location.hostname === 'localhost' || 
+                     window.location.hostname === '127.0.0.1';
+
+    const getIPLocationCoords = async () => {
+      const ipCoords = await fetchIPLocation();
+      if (ipCoords) {
+        setPickedLocation(ipCoords);
+      }
+    };
+
+    if ('geolocation' in navigator && isSecure) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setPickedLocation({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude
+          });
+        },
+        async (err) => {
+          console.warn("GPS failed in openForm, trying IP fallback:", err.message);
+          await getIPLocationCoords();
+        },
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 30000 }
+      );
+    } else {
+      await getIPLocationCoords();
+    }
+  };
+
   const closeForm = () => { resetForm(); setShowAddForm(false); };
 
   useEffect(() => {
@@ -437,9 +519,9 @@ export const SellerDashboard = () => {
     if (!quantity || isNaN(qtyNum) || qtyNum < 1) { setSubmitError('Quantity must be at least 1.'); return; }
     if (price === '' || isNaN(priceNum) || priceNum < 0) { setSubmitError('Enter a valid price (0 for free/donation).'); return; }
 
-    // Location — parse as float and fallback to Mumbai coordinates if invalid
-    const lat = parseFloat(pickedLocation?.latitude || user?.latitude || 19.0760);
-    const lng = parseFloat(pickedLocation?.longitude || user?.longitude || 72.8777);
+    // Location — use the locked kitchen coordinates of the seller
+    const lat = parseFloat(user?.latitude || 19.0760);
+    const lng = parseFloat(user?.longitude || 72.8777);
     const finalLat = isNaN(lat) || lat === 0 ? 19.0760 : lat;
     const finalLng = isNaN(lng) || lng === 0 ? 72.8777 : lng;
     const resolvedLocation = { latitude: finalLat, longitude: finalLng };
@@ -584,6 +666,45 @@ export const SellerDashboard = () => {
             <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
+      </div>
+
+      {/* ── Sub Navigation Tabs (Desktop & Tablet) ────────────────────── */}
+      <div className="hidden md:flex items-center gap-2 border-b border-white/5 pb-2">
+        <Link
+          to="/seller-dashboard"
+          className={`px-4 py-2 rounded-xl text-xs font-bold border transition ${
+            activeTab === 'dashboard'
+              ? 'bg-primary-500/10 border-primary-500/30 text-primary-500 shadow-md'
+              : 'border-transparent text-gray-400 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <LayoutDashboard size={14} />
+            <span>Overview Dashboard</span>
+          </div>
+        </Link>
+        <Link
+          to="/seller-dashboard?tab=orders"
+          className={`px-4 py-2 rounded-xl text-xs font-bold border transition ${
+            activeTab === 'orders'
+              ? 'bg-primary-500/10 border-primary-500/30 text-primary-500 shadow-md'
+              : 'border-transparent text-gray-400 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <ShoppingBag size={14} />
+            <span>Orders Record ({orders.length})</span>
+          </div>
+        </Link>
+        <Link
+          to="/seller-analytics"
+          className="px-4 py-2 rounded-xl text-xs font-bold border border-transparent text-gray-400 hover:text-white hover:bg-white/5 transition"
+        >
+          <div className="flex items-center gap-2">
+            <BarChart3 size={14} />
+            <span>Kitchen Analytics</span>
+          </div>
+        </Link>
       </div>
 
       {/* ── Dashboard view contents ── */}
@@ -1060,19 +1181,17 @@ export const SellerDashboard = () => {
                 </div>
               </div>
 
-              {/* ── Map Location Picker ─────────────────────────────── */}
+              {/* ── Map Location Picker (Read-Only Confirmation) ── */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold uppercase text-gray-400 ml-1">Pin Kitchen Coordinates</label>
                 <div className="rounded-2xl overflow-hidden border border-white/10">
                   <LocationPickerMap
                     initialLocation={
-                      pickedLocation || 
-                      (user?.latitude && user?.longitude && user.latitude !== 0 && user.longitude !== 0
+                      user?.latitude && user?.longitude && user.latitude !== 0 && user.longitude !== 0
                         ? { latitude: user.latitude, longitude: user.longitude }
-                        : null)
+                        : null
                     }
-                    onLocationChange={(loc) => setPickedLocation(loc)}
-                    height="200px"
+                    readOnly={true}
+                    height="280px"
                   />
                 </div>
               </div>

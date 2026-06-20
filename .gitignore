@@ -6,6 +6,9 @@ project/frontend/node_modules/
 dist/
 project/frontend/dist/
 
+# Capacitor Android build artifacts
+project/frontend/android/
+
 # Local env files
 .env
 .env.local

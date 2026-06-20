@@ -4,6 +4,8 @@ import { useAuth } from '../../hooks/useAuth';
 import { useGeolocation } from '../../hooks/useGeolocation';
 import { uploadImage } from '../../firebase/storage';
 import Logo from '../../components/Logo';
+import { db } from '../../firebase/config';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { 
   Lock, 
   Mail, 
@@ -146,6 +148,16 @@ export const Auth = () => {
         }
         if (role === 'seller' && (!kitchenName || !kitchenAddress)) {
           throw new Error("Kitchen Name and Kitchen Address are required for Home Cooks.");
+        }
+
+        // Unique mobile check
+        const phoneClean = mobile.trim();
+        if (phoneClean) {
+          const phoneQ = query(collection(db, 'users'), where('mobile', '==', phoneClean));
+          const phoneSnap = await getDocs(phoneQ);
+          if (!phoneSnap.empty) {
+            throw new Error("This phone number is already registered to another account.");
+          }
         }
 
         const userProfile = await register(

@@ -329,3 +329,24 @@ h1, h2, h3, h4, h5, h6 {
   animation: bounce-subtle 2s ease-in-out infinite;
 }
 
+/* GPS "You Are Here" pulsing marker animation for LocationPickerMap */
+@keyframes gpsPulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.4;
+  }
+  70% {
+    transform: scale(2.5);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(3);
+    opacity: 0;
+  }
+}
+
+.gps-location-icon {
+  background: transparent !important;
+  border: none !important;
+}
+

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
+import MapView from '../../components/MapView';
 import { 
   Users, 
   ShieldCheck, 
@@ -102,6 +103,7 @@ export const Admin = () => {
   const [activeTab, setActiveTab]       = useState('registrations');
   const [searchQuery, setSearchQuery]   = useState('');
   const [selectedRoleFilter, setSelectedRoleFilter] = useState(null);
+  const [relocations, setRelocations]   = useState([]);
 
   useEffect(() => {
     setSelectedRoleFilter(null);
@@ -128,7 +130,22 @@ export const Admin = () => {
     }
   };
 
-  useEffect(() => { loadUsersData(); }, []);
+  const loadRelocationsData = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'locationChangeRequests'));
+      const list = [];
+      querySnapshot.forEach((d) => list.push({ id: d.id, ...d.data() }));
+      list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      setRelocations(list);
+    } catch (e) {
+      console.error('Failed to load relocation requests:', e);
+    }
+  };
+
+  useEffect(() => { 
+    loadUsersData(); 
+    loadRelocationsData();
+  }, []);
 
   const handleVerifySeller = async (uid, approve = true) => {
     try {
@@ -149,6 +166,65 @@ export const Admin = () => {
         approve ? 'success' : 'warning'
       );
       await loadUsersData();
+    } catch (e) {
+      alert('Error: ' + e.message);
+    }
+  };
+
+  const handleApproveRelocation = async (requestId, sellerId, newCoords, newAddress) => {
+    try {
+      await updateDoc(doc(db, 'locationChangeRequests', requestId), { status: 'approved' });
+      await updateDoc(doc(db, 'users', sellerId), { 
+        latitude: parseFloat(newCoords.latitude), 
+        longitude: parseFloat(newCoords.longitude),
+        kitchenAddress: newAddress
+      });
+      await updateDoc(doc(db, 'sellers', sellerId), { 
+        latitude: parseFloat(newCoords.latitude), 
+        longitude: parseFloat(newCoords.longitude),
+        kitchenAddress: newAddress
+      }).catch(() => {});
+
+      await addAuditLog(
+        user?.name || 'Admin', 
+        'APPROVE_RELOCATION', 
+        `Approved kitchen relocation for seller ${sellerId} to ${newCoords.latitude}, ${newCoords.longitude}`
+      );
+
+      simulateLocalNotification(
+        'Relocation Approved!',
+        `Seller's kitchen location has been updated to new coordinates.`,
+        'success'
+      );
+      await loadRelocationsData();
+      await loadUsersData();
+    } catch (e) {
+      alert('Error: ' + e.message);
+    }
+  };
+
+  const handleRejectRelocation = async (requestId, sellerId) => {
+    const comment = prompt("Please enter rejection reason / comment:");
+    if (comment === null) return;
+
+    try {
+      await updateDoc(doc(db, 'locationChangeRequests', requestId), { 
+        status: 'rejected',
+        adminComment: comment.trim() || 'Declined by Administrator'
+      });
+
+      await addAuditLog(
+        user?.name || 'Admin', 
+        'REJECT_RELOCATION', 
+        `Rejected relocation request for seller ${sellerId}. Reason: ${comment}`
+      );
+
+      simulateLocalNotification(
+        'Relocation Rejected',
+        `Request declined. Comment saved: "${comment}"`,
+        'warning'
+      );
+      await loadRelocationsData();
     } catch (e) {
       alert('Error: ' + e.message);
     }
@@ -232,6 +308,7 @@ export const Admin = () => {
     if (activeTab === 'coupons') loadCouponsData();
     if (activeTab === 'audit') loadAuditLogsData();
     if (activeTab === 'disputes') loadDisputesData();
+    if (activeTab === 'relocations') loadRelocationsData();
   }, [activeTab]);
 
   // Load disputes count on mount for badges
@@ -422,8 +499,11 @@ export const Admin = () => {
 
   const openDisputes = disputes.filter(d => d.status === 'open');
 
+  const pendingRelocations = relocations.filter(r => r.status === 'pending');
+
   const TABS = [
     { key: 'registrations', label: 'Pending Approval',  badge: pendingSellers.length },
+    { key: 'relocations',   label: 'Location Changes',  badge: pendingRelocations.length },
     { key: 'users',         label: 'All Users',         badge: users.length },
     { key: 'watchlist',     label: 'Trust Watchlist',   badge: lowTrustSellers.length },
     { key: 'analytics',     label: 'Analytics',         badge: null },
@@ -859,6 +939,128 @@ export const Admin = () => {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ══ LOCATION CHANGES (RELOCATIONS) ══════════════════════════════════ */}
+      {activeTab === 'relocations' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between border-b border-white/5 pb-2">
+            <div>
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider">Kitchen Relocation Requests</h3>
+              <p className="text-[11px] text-gray-400">Review and authorize seller requests to change their permanent kitchen coordinates.</p>
+            </div>
+            <span className="text-xs bg-[#00F5FF]/10 text-[#00F5FF] border border-[#00F5FF]/20 px-3 py-1 rounded-full font-bold">
+              {pendingRelocations.length} Pending
+            </span>
+          </div>
+
+          {relocations.length === 0 ? (
+            <div className="glass-panel p-12 rounded-2xl border border-white/5 text-center text-xs text-gray-500">
+              No kitchen relocation requests have been submitted yet.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {relocations.map((req) => (
+                <div 
+                  key={req.id} 
+                  className={`glass-panel p-5 rounded-2xl border flex flex-col justify-between gap-4 ${
+                    req.status === 'pending'
+                      ? 'border-amber-500/25 bg-amber-500/2'
+                      : req.status === 'approved'
+                        ? 'border-emerald-500/10 bg-emerald-500/1'
+                        : 'border-white/5 bg-white/2'
+                  }`}
+                >
+                  <div className="space-y-3 text-xs">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="font-extrabold text-white text-sm">{req.kitchenName}</h4>
+                        <span className="text-[10px] text-gray-400">Seller Name: {req.sellerName}</span>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${
+                        req.status === 'pending'
+                          ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20'
+                          : req.status === 'approved'
+                            ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
+                            : 'bg-rose-500/15 text-rose-400 border border-rose-500/20'
+                      }`}>
+                        {req.status}
+                      </span>
+                    </div>
+
+                    <div className="bg-black/25 p-3 rounded-xl space-y-2 border border-white/5 leading-normal">
+                      <p className="text-gray-400">
+                        <strong>Relocation Reason:</strong>
+                        <span className="text-white block mt-0.5 font-medium">"{req.reason}"</span>
+                      </p>
+                      <div className="grid grid-cols-2 gap-3 text-[10px] border-t border-white/5 pt-2">
+                        <div>
+                          <strong className="text-gray-500 block uppercase tracking-wider text-[8px]">Current Location</strong>
+                          <span className="text-gray-300 block truncate">{req.currentAddress}</span>
+                          <span className="text-gray-500 font-mono">{req.currentLocation?.latitude.toFixed(5)}, {req.currentLocation?.longitude.toFixed(5)}</span>
+                        </div>
+                        <div>
+                          <strong className="text-[#00F5FF] block uppercase tracking-wider text-[8px]">Requested Location</strong>
+                          <span className="text-white block truncate">{req.requestedAddress}</span>
+                          <span className="text-[#00F5FF] font-mono">{req.requestedLocation?.latitude.toFixed(5)}, {req.requestedLocation?.longitude.toFixed(5)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Preview map showing current and requested pins */}
+                    {req.currentLocation && req.requestedLocation && (
+                      <div className="h-36 rounded-xl overflow-hidden border border-white/5 bg-slate-950/20 relative">
+                        <MapView
+                          foods={[
+                            {
+                              id: 'current',
+                              foodName: `Current: ${req.kitchenName}`,
+                              location: req.currentLocation,
+                              sellerName: 'Current Location',
+                              status: 'available'
+                            },
+                            {
+                              id: 'requested',
+                              foodName: `Requested: ${req.kitchenName}`,
+                              location: req.requestedLocation,
+                              sellerName: 'Requested Location',
+                              status: 'available'
+                            }
+                          ]}
+                          buyerCoords={null}
+                          height="144px"
+                        />
+                      </div>
+                    )}
+
+                    {req.status === 'rejected' && req.adminComment && (
+                      <div className="bg-rose-500/5 p-2 rounded-lg text-rose-300/80 text-[10px] border border-rose-500/10">
+                        <strong>Rejection Reason:</strong> "{req.adminComment}"
+                      </div>
+                    )}
+                  </div>
+
+                  {req.status === 'pending' && (
+                    <div className="flex gap-2 pt-2 border-t border-white/5">
+                      <button
+                        onClick={() => handleRejectRelocation(req.id, req.sellerId)}
+                        className="flex-1 py-2 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-400 text-[11px] font-bold rounded-xl transition cursor-pointer"
+                      >
+                        Reject
+                      </button>
+                      <button
+                        onClick={() => handleApproveRelocation(req.id, req.sellerId, req.requestedLocation, req.requestedAddress)}
+                        className="flex-2 flex-grow py-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-[11px] font-black rounded-xl transition cursor-pointer shadow-md shadow-emerald-500/10"
+                      >
+                        Approve Change
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

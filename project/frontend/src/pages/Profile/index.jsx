@@ -13,14 +13,26 @@ import {
   LogOut,
   Compass,
   TrendingUp,
-  RefreshCw
+  RefreshCw,
+  Lock,
+  X
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getSellerOrders, recalculateSellerEarnings } from '../../firebase/firestore';
+import { db } from '../../firebase/config';
+import { collection, query, where, orderBy, limit, getDocs, addDoc } from 'firebase/firestore';
+import LocationPickerMap from '../../components/LocationPickerMap';
 
 export const Profile = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+
+  const [showRelocationModal, setShowRelocationModal] = useState(false);
+  const [newLocation, setNewLocation] = useState(null);
+  const [newAddress, setNewAddress] = useState('');
+  const [relocationReason, setRelocationReason] = useState('');
+  const [submittingRequest, setSubmittingRequest] = useState(false);
+  const [latestRequest, setLatestRequest] = useState(null);
 
   const [userFinancials, setUserFinancials] = useState(user?.financials || null);
   const [completedOrders, setCompletedOrders] = useState([]);
@@ -45,15 +57,76 @@ export const Profile = () => {
     }
   };
 
+  const fetchLatestRelocationRequest = async () => {
+    if (user?.role !== 'seller') return;
+    try {
+      const q = query(
+        collection(db, 'locationChangeRequests'),
+        where('sellerId', '==', user.uid)
+      );
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const list = [];
+        snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
+        list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        setLatestRequest(list[0]);
+      }
+    } catch (err) {
+      console.error("Failed to fetch relocation request:", err);
+    }
+  };
+
   useEffect(() => {
     if (user?.role === 'seller') {
       loadFinancialRecords();
+      fetchLatestRelocationRequest();
     }
   }, [user]);
 
   const handleSignOut = async () => {
     await logout();
     navigate('/auth');
+  };
+
+  const handleSubmitRelocation = async (e) => {
+    e.preventDefault();
+    if (!newLocation) {
+      alert("Please select a new kitchen location on the map.");
+      return;
+    }
+    if (!relocationReason.trim()) {
+      alert("Please enter a reason for relocation.");
+      return;
+    }
+
+    setSubmittingRequest(true);
+    try {
+      const requestData = {
+        sellerId: user.uid,
+        sellerName: user.name,
+        kitchenName: user.kitchenName || user.name,
+        currentLocation: { latitude: user.latitude, longitude: user.longitude },
+        currentAddress: user.kitchenAddress || '',
+        requestedLocation: { latitude: parseFloat(newLocation.latitude), longitude: parseFloat(newLocation.longitude) },
+        requestedAddress: newAddress || 'Selected Map Location',
+        reason: relocationReason.trim(),
+        status: 'pending',
+        createdAt: new Date().toISOString()
+      };
+
+      await addDoc(collection(db, 'locationChangeRequests'), requestData);
+      alert("Relocation request submitted successfully. Admin review is pending.");
+      setShowRelocationModal(false);
+      setNewLocation(null);
+      setNewAddress('');
+      setRelocationReason('');
+      await fetchLatestRelocationRequest();
+    } catch (err) {
+      console.error("Failed to submit relocation request:", err);
+      alert("Error submitting request: " + err.message);
+    } finally {
+      setSubmittingRequest(false);
+    }
   };
 
   const userCoords = React.useMemo(() => {
@@ -155,14 +228,53 @@ export const Profile = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-3 text-sm">
+                 <div className="flex items-center space-x-3 text-sm">
                   <Compass className="text-gray-500" size={18} />
                   <div>
                     <span className="text-[10px] text-gray-400 block font-semibold">GPS Coordinates</span>
-                    <span className="text-white font-medium">{user.latitude.toFixed(6)}, {user.longitude.toFixed(6)}</span>
+                    <span className="text-white font-medium">{Number(user.latitude || 0).toFixed(6)}, {Number(user.longitude || 0).toFixed(6)}</span>
                   </div>
                 </div>
               </div>
+
+              {/* Location locking / Relocation section for Sellers */}
+              {user.role === 'seller' && (
+                <div className="border-t border-white/5 pt-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                      <Lock size={12} className="text-primary-500" />
+                      Locked Location
+                    </span>
+                    <button
+                      onClick={() => setShowRelocationModal(true)}
+                      disabled={latestRequest?.status === 'pending'}
+                      className="px-3.5 py-1.5 bg-[#00F5FF]/10 hover:bg-[#00F5FF]/20 disabled:bg-white/5 disabled:text-gray-500 border border-[#00F5FF]/20 disabled:border-white/5 text-[#00F5FF] disabled:cursor-not-allowed text-[11px] font-bold rounded-xl transition cursor-pointer"
+                    >
+                      Request Location Change
+                    </button>
+                  </div>
+
+                  {latestRequest && latestRequest.status === 'pending' && (
+                    <div className="bg-amber-500/10 border border-amber-500/25 p-3 rounded-xl flex items-start gap-2 text-amber-200/90 text-[11px] leading-relaxed">
+                      <span>⏳</span>
+                      <div>
+                        <strong>Location change request pending admin review.</strong>
+                        <p className="text-[10px] text-gray-400 mt-0.5">Requested Coordinates: {Number(latestRequest.requestedLocation?.latitude).toFixed(5)}, {Number(latestRequest.requestedLocation?.longitude).toFixed(5)}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {latestRequest && latestRequest.status === 'rejected' && (
+                    <div className="bg-rose-500/10 border border-rose-500/25 p-3 rounded-xl flex items-start gap-2 text-rose-300 text-[11px] leading-relaxed">
+                      <span>❌</span>
+                      <div>
+                        <strong>Previous relocation request rejected by Admin.</strong>
+                        <p className="text-[10px] text-rose-300/80 mt-0.5">Reason: "{latestRequest.adminComment || 'No explanation provided'}"</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Mini Coordinates Map */}
               <div className="border-t border-white/5 pt-4 space-y-2">
@@ -258,6 +370,84 @@ export const Profile = () => {
       ) : (
         <div className="glass-panel p-12 text-center text-gray-400 rounded-2xl">
           Please login to view your profile coordinates.
+        </div>
+      )}
+
+      {/* Relocation Request Modal */}
+      {showRelocationModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div 
+            className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
+            onClick={() => setShowRelocationModal(false)}
+          />
+          <div className="relative w-full max-w-lg bg-[#0b0c10]/95 border border-white/10 rounded-[2rem] p-6 shadow-2xl z-10 flex flex-col space-y-4">
+            <button
+              onClick={() => setShowRelocationModal(false)}
+              className="absolute top-4 right-4 p-2 bg-slate-900/50 hover:bg-slate-900 text-gray-400 hover:text-white rounded-full border border-white/10 transition cursor-pointer"
+            >
+              <X size={16} />
+            </button>
+
+            <header className="border-b border-white/5 pb-2">
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <MapPin className="text-[#00F5FF]" size={20} />
+                <span>Request Coordinate Relocation</span>
+              </h2>
+              <p className="text-[11px] text-gray-400 mt-1">Select your new kitchen location and provide a reason for the relocation request.</p>
+            </header>
+
+            <form onSubmit={handleSubmitRelocation} className="space-y-4">
+              {/* Map location picker */}
+              <div className="rounded-xl overflow-hidden border border-white/5 bg-black/25 relative">
+                <LocationPickerMap
+                  initialLocation={userCoords}
+                  onLocationChange={(loc) => setNewLocation(loc)}
+                  onAddressResolved={(addr) => setNewAddress(addr)}
+                  height="220px"
+                />
+              </div>
+
+              {newLocation && (
+                <div className="bg-white/5 p-3 rounded-xl border border-white/5 text-[10px] font-mono text-gray-400 space-y-1">
+                  <div className="flex justify-between">
+                    <span>Requested Lat: {newLocation.latitude.toFixed(6)}</span>
+                    <span>Requested Lng: {newLocation.longitude.toFixed(6)}</span>
+                  </div>
+                  {newAddress && <p className="leading-tight text-white/70">Address: {newAddress}</p>}
+                </div>
+              )}
+
+              {/* Relocation Reason */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase text-gray-400">Reason for relocation *</label>
+                <textarea
+                  required
+                  placeholder="Provide a reason for the address/coordinate change (e.g. Moved to a new house, correction, kitchen relocated...)"
+                  rows={3}
+                  value={relocationReason}
+                  onChange={(e) => setRelocationReason(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-2xl p-3 text-white placeholder-gray-600 focus:outline-none text-xs resize-none"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowRelocationModal(false)}
+                  className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-full border border-white/10 text-xs transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingRequest || !newLocation}
+                  className="flex-2 flex-grow py-3 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-slate-950 font-black rounded-full text-xs transition flex items-center justify-center gap-2 cursor-pointer shadow-md disabled:opacity-50"
+                >
+                  {submittingRequest ? <RefreshCw className="animate-spin text-slate-950" size={14} /> : 'Submit Request'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

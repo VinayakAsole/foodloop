@@ -126,7 +126,7 @@ export const signInUser = async (email, password) => {
       const userCredential = await signInWithEmailAndPassword(auth, emailClean, password);
       const userSnapshot = await getDoc(doc(db, 'users', userCredential.user.uid));
       if (userSnapshot.exists()) {
-        return userSnapshot.data();
+        return { uid: userCredential.user.uid, ...userSnapshot.data() };
       } else {
         // Create user document if it got deleted in Firestore
         const adminData = {
@@ -200,7 +200,7 @@ export const signInUser = async (email, password) => {
   const userCredential = await signInWithEmailAndPassword(auth, emailClean, password);
   const userSnapshot = await getDoc(doc(db, 'users', userCredential.user.uid));
   if (userSnapshot.exists()) {
-    return userSnapshot.data();
+    return { uid: userCredential.user.uid, ...userSnapshot.data() };
   }
   throw new Error("User profile not found in database.");
 };
@@ -217,7 +217,7 @@ export const signOutUser = async () => {
  */
 export const getUserProfile = async (uid) => {
   const userDoc = await getDoc(doc(db, 'users', uid));
-  return userDoc.exists() ? userDoc.data() : null;
+  return userDoc.exists() ? { uid, ...userDoc.data() } : null;
 };
 
 /**

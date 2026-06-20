@@ -12,7 +12,10 @@ import {
   Menu, 
   X, 
   ChefHat,
-  Sparkles
+  Sparkles,
+  Compass,
+  LayoutDashboard,
+  BarChart3
 } from 'lucide-react';
 
 export const Navbar = () => {
@@ -21,7 +24,16 @@ export const Navbar = () => {
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const isActive = (path) => location.pathname === path;
+  const isActive = (path) => {
+    if (path.includes('?')) {
+      const [pathname, search] = path.split('?');
+      return location.pathname === pathname && location.search.includes(search);
+    }
+    if (path === '/') {
+      return location.pathname === '/' && !location.search.includes('map=true') && !location.search.includes('showLedger=true');
+    }
+    return location.pathname === path;
+  };
   
   const handleLogout = async () => {
     await logout();
@@ -32,10 +44,13 @@ export const Navbar = () => {
   if (user) {
     if (user.role === 'buyer') {
       navItems.push({ label: 'Browse Food', path: '/', icon: Home });
+      navItems.push({ label: 'Explore Map', path: '/?map=true', icon: Compass });
       navItems.push({ label: 'My Orders', path: '/orders', icon: ShoppingBag });
       navItems.push({ label: 'Eco Impact', path: '/?showLedger=true', icon: Sparkles });
     } else if (user.role === 'seller') {
-      navItems.push({ label: 'Seller Panel', path: '/seller-dashboard', icon: ChefHat });
+      navItems.push({ label: 'Dashboard', path: '/seller-dashboard', icon: LayoutDashboard });
+      navItems.push({ label: 'Orders', path: '/seller-dashboard?tab=orders', icon: ShoppingBag });
+      navItems.push({ label: 'Analytics', path: '/seller-analytics', icon: BarChart3 });
     } else if (user.role === 'admin') {
       navItems.push({ label: 'Admin Portal', path: '/admin', icon: ShieldAlert });
     }
