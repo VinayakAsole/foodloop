@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getAvailableFoods } from '../../firebase/firestore';
 import { useAuth } from '../../hooks/useAuth';
+import { Capacitor } from '@capacitor/core';
+import { Geolocation } from '@capacitor/geolocation';
 import { fetchIPLocation } from '../../utils/geolocationFallback';
 import FoodCard from '../../components/FoodCard';
 import MapView from '../../components/MapView';
@@ -164,10 +166,28 @@ export const Home = () => {
       }
     }
 
-    const getPosition = (options) => {
-      return new Promise((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, options);
-      });
+    const getPosition = async (options) => {
+      if (Capacitor.isNativePlatform()) {
+        try {
+          const permission = await Geolocation.requestPermissions();
+          if (permission.location !== 'granted') {
+            const err = new Error("Location permission not granted");
+            err.code = 1;
+            throw err;
+          }
+          const position = await Geolocation.getCurrentPosition({
+            enableHighAccuracy: options.enableHighAccuracy,
+            timeout: options.timeout
+          });
+          return position;
+        } catch (e) {
+          throw e;
+        }
+      } else {
+        return new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, options);
+        });
+      }
     };
 
     const handleSuccess = async (position) => {
