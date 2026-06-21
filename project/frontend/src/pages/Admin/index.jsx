@@ -20,7 +20,8 @@ import {
   Clock,
   CheckCircle2,
   XCircle,
-  Search
+  Search,
+  Plus
 } from 'lucide-react';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
@@ -338,6 +339,12 @@ export const Admin = () => {
   const [orders, setOrders] = useState([]);
   const [coupons, setCoupons] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
+  const [auditSearch, setAuditSearch] = useState('');
+  const [auditFilterType, setAuditFilterType] = useState('ALL');
+  const [showManualLogModal, setShowManualLogModal] = useState(false);
+  const [manualAction, setManualAction] = useState('MANUAL_OVERRIDE');
+  const [manualDetails, setManualDetails] = useState('');
+  const [submittingLog, setSubmittingLog] = useState(false);
   const [disputes, setDisputes] = useState([]);
 
   // Coupon form state
@@ -376,6 +383,42 @@ export const Admin = () => {
       console.error("Failed to load audit logs:", e);
     }
   };
+
+  const handleAddManualLog = async (e) => {
+    e.preventDefault();
+    if (!manualDetails.trim()) return;
+    setSubmittingLog(true);
+    try {
+      await addAuditLog(
+        user?.name || 'Admin',
+        manualAction,
+        manualDetails.trim()
+      );
+      setManualDetails('');
+      setShowManualLogModal(false);
+      simulateLocalNotification(
+        "Audit Log Created",
+        "A manual security/override log entry has been recorded.",
+        "success"
+      );
+      await loadAuditLogsData();
+    } catch (err) {
+      alert("Error adding audit log: " + err.message);
+    } finally {
+      setSubmittingLog(false);
+    }
+  };
+
+  const filteredAuditLogs = auditLogs.filter(log => {
+    const matchesSearch = 
+      (log.adminName || '').toLowerCase().includes(auditSearch.toLowerCase()) ||
+      (log.details || '').toLowerCase().includes(auditSearch.toLowerCase()) ||
+      (log.actionType || '').toLowerCase().includes(auditSearch.toLowerCase());
+      
+    const matchesType = auditFilterType === 'ALL' || log.actionType === auditFilterType;
+    
+    return matchesSearch && matchesType;
+  });
 
   const loadDisputesData = async () => {
     try {
@@ -1369,8 +1412,53 @@ export const Admin = () => {
       {/* ══ AUDIT LOG ═════════════════════════════════════════════════════ */}
       {activeTab === 'audit' && (
         <div className="glass-panel p-5 rounded-2xl border border-white/10 space-y-4 animate-slide-up">
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider">Platform Security Audit Log</h3>
-          {auditLogs.length > 0 ? (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-3">
+            <div>
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider">Platform Security Audit Log</h3>
+              <p className="text-[10px] text-gray-400">Immutable ledger tracking administrative actions and security overrides.</p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowManualLogModal(true)}
+                className="flex items-center space-x-1 px-3 py-1.5 bg-gradient-to-r from-secondary-500 to-secondary-600 hover:from-secondary-600 hover:to-secondary-700 text-slate-950 text-xs font-bold rounded-lg transition active:scale-[0.98] cursor-pointer"
+              >
+                <Plus size={12} />
+                <span>Add Log Entry</span>
+              </button>
+              <button
+                onClick={loadAuditLogsData}
+                className="flex items-center space-x-1 px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 text-xs font-bold rounded-lg border border-white/10 transition cursor-pointer"
+              >
+                <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
+                <span>Refresh</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Search and Filters */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-grow">
+              <Search className="absolute left-3 top-2.5 text-gray-500" size={14} />
+              <input
+                type="text"
+                placeholder="Search logs by admin, details, or action..."
+                value={auditSearch}
+                onChange={(e) => setAuditSearch(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 bg-black/40 border border-white/10 rounded-xl text-xs text-gray-200 focus:outline-none focus:border-secondary-500/50"
+              />
+            </div>
+            <select
+              value={auditFilterType}
+              onChange={(e) => setAuditFilterType(e.target.value)}
+              className="px-3 py-2 bg-black/40 border border-white/10 rounded-xl text-xs text-gray-300 focus:outline-none focus:border-secondary-500/50 cursor-pointer"
+            >
+              {['ALL', 'CREATE_COUPON', 'TOGGLE_COUPON', 'VERIFY_SELLER', 'SUSPEND_SELLER', 'APPROVE_RELOCATION', 'REJECT_RELOCATION', 'RESOLVE_DISPUTE', 'MANUAL_OVERRIDE', 'SECURITY_NOTICE'].map(type => (
+                <option key={type} value={type} className="bg-slate-950">{type.replace('_', ' ')}</option>
+              ))}
+            </select>
+          </div>
+
+          {filteredAuditLogs.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
@@ -1382,15 +1470,18 @@ export const Admin = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5 text-gray-300">
-                  {auditLogs.map((log) => (
+                  {filteredAuditLogs.map((log) => (
                     <tr key={log.id} className="hover:bg-white/2">
-                      <td className="p-3 text-gray-500 whitespace-nowrap">{new Date(log.timestamp).toLocaleString('en-IN')}</td>
+                      <td className="p-3 text-gray-500 whitespace-nowrap">
+                        {log.timestamp ? new Date(log.timestamp).toLocaleString('en-IN') : 'N/A'}
+                      </td>
                       <td className="p-3 font-semibold text-white whitespace-nowrap">{log.adminName}</td>
                       <td className="p-3 whitespace-nowrap">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                           log.actionType === 'CREATE_COUPON' ? 'bg-primary-500/10 text-primary-500' :
                           log.actionType === 'VERIFY_SELLER' ? 'bg-emerald-500/10 text-emerald-400' :
                           log.actionType === 'SUSPEND_SELLER' ? 'bg-rose-500/10 text-rose-400' :
+                          log.actionType === 'SECURITY_NOTICE' ? 'bg-amber-500/10 text-amber-400' :
                           'bg-blue-500/10 text-blue-400'
                         }`}>
                           {log.actionType}
@@ -1403,8 +1494,60 @@ export const Admin = () => {
               </table>
             </div>
           ) : (
-            <p className="text-center py-12 text-xs text-gray-500">Audit log registry is currently empty.</p>
+            <p className="text-center py-12 text-xs text-gray-500">No matching audit logs found.</p>
           )}
+        </div>
+      )}
+
+      {/* Manual Audit Log Entry Modal */}
+      {showManualLogModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-md" onClick={() => setShowManualLogModal(false)} />
+          <div className="relative w-full max-w-md bg-[#0f111c]/90 border border-white/10 rounded-3xl p-6 shadow-2xl z-10 space-y-4">
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider">Record Audit Entry</h3>
+            <form onSubmit={handleAddManualLog} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] text-gray-400 uppercase font-bold">Action Type</label>
+                <select
+                  value={manualAction}
+                  onChange={(e) => setManualAction(e.target.value)}
+                  className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-xl text-xs text-gray-300 focus:outline-none focus:border-secondary-500/50 cursor-pointer"
+                >
+                  <option value="MANUAL_OVERRIDE" className="bg-slate-950">Manual Override</option>
+                  <option value="SECURITY_NOTICE" className="bg-slate-950">Security Notice</option>
+                  <option value="SYSTEM_OVERRIDE" className="bg-slate-950">System Override</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] text-gray-400 uppercase font-bold">Audit Details / Reason</label>
+                <textarea
+                  required
+                  rows={4}
+                  placeholder="Enter details explaining this administrative action or security notice..."
+                  value={manualDetails}
+                  onChange={(e) => setManualDetails(e.target.value)}
+                  className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-xl text-xs text-gray-300 focus:outline-none focus:border-secondary-500/50 placeholder:text-gray-600"
+                />
+              </div>
+              <div className="flex gap-2 justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowManualLogModal(false)}
+                  className="px-4 py-2 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded-xl text-xs font-semibold transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingLog}
+                  className="px-4 py-2 bg-gradient-to-r from-secondary-500 to-secondary-600 hover:from-secondary-600 hover:to-secondary-700 text-slate-950 rounded-xl text-xs font-bold transition flex items-center gap-1.5 animate-pulse-subtle"
+                >
+                  {submittingLog && <RefreshCw size={12} className="animate-spin" />}
+                  <span>Record Log</span>
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

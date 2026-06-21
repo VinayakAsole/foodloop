@@ -103,8 +103,9 @@ export const Home = () => {
   }, []);
 
   const [showLocationModal, setShowLocationModal] = useState(false);
+  const [hasNotifiedPermission, setHasNotifiedPermission] = useState(false);
 
-  const requestGeoLocation = async () => {
+  const requestGeoLocation = async (isManual = false) => {
     if (!user) {
       setShowLocationModal(false);
       return;
@@ -139,44 +140,98 @@ export const Home = () => {
                      window.location.hostname === '127.0.0.1';
 
     if (!('geolocation' in navigator) || !isSecure) {
+      if (isManual && !hasNotifiedPermission) {
+        alert("Location access is not supported or not secure on this browser. Falling back to IP location.");
+        setHasNotifiedPermission(true);
+      }
       await handleIPFallback(!isSecure ? 'Geolocation requires a secure context (HTTPS/localhost)' : 'Geolocation not supported by browser');
       return;
     }
 
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        console.log("Device GPS Coordinates acquired:", latitude, longitude);
-        
-        // Sync memory state
-        if (updateProfileState) {
-          updateProfileState({ latitude, longitude });
+    // Check permission status manually if clicked
+    if (isManual && !hasNotifiedPermission && 'permissions' in navigator) {
+      try {
+        const result = await navigator.permissions.query({ name: 'geolocation' });
+        if (result.state === 'granted') {
+          alert("Location access is allowed! Fetching your precise device location...");
+          setHasNotifiedPermission(true);
+        } else if (result.state === 'denied') {
+          alert("Location access is denied. Please enable/allow location permissions in your browser or device settings to get the proper location of your device.");
+          setHasNotifiedPermission(true);
         }
-        
-        // Sync persistent Firestore profile
+      } catch (err) {
+        console.warn("Could not query permissions API:", err);
+      }
+    }
+
+    const getPosition = (options) => {
+      return new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, options);
+      });
+    };
+
+    const handleSuccess = async (position) => {
+      const { latitude, longitude } = position.coords;
+      console.log("Device GPS Coordinates acquired:", latitude, longitude);
+      
+      // Sync memory state
+      if (updateProfileState) {
+        updateProfileState({ latitude, longitude });
+      }
+      
+      // Sync persistent Firestore profile
+      try {
+        const updates = { latitude, longitude };
+        await updateDoc(doc(db, 'users', user.uid), updates);
+        if (user.role === 'buyer') {
+          await updateDoc(doc(db, 'buyers', user.uid), updates).catch(() => {});
+        } else if (user.role === 'seller') {
+          await updateDoc(doc(db, 'sellers', user.uid), updates).catch(() => {});
+        }
+        console.log("Updated device coordinates in Firestore user profile.");
+      } catch (err) {
+        console.error("Failed to update coordinates in Firestore profile:", err);
+      }
+      setShowLocationModal(false);
+    };
+
+    const handleError = async (error) => {
+      let errorMessage = 'Failed to fetch location';
+      if (error.code === 1) {
+        errorMessage = 'Location access denied by user';
+        if (isManual && !hasNotifiedPermission) {
+          alert("Location access is denied. Please enable/allow location permissions in your browser or device settings to get the proper location of your device.");
+          setHasNotifiedPermission(true);
+        }
+      }
+      else if (error.code === 2) errorMessage = 'Location unavailable';
+      else if (error.code === 3) errorMessage = 'Location fetch timeout';
+      
+      if (isManual && !hasNotifiedPermission && error.code !== 1) {
+        alert(`Location access error: ${errorMessage}. Falling back to IP location.`);
+        setHasNotifiedPermission(true);
+      }
+      await handleIPFallback(errorMessage);
+    };
+
+    try {
+      // Try high accuracy location with a slightly longer 10s timeout
+      const position = await getPosition({ enableHighAccuracy: true, timeout: 10000, maximumAge: 15000 });
+      await handleSuccess(position);
+    } catch (error) {
+      if (error.code === 3) {
+        // High accuracy timed out. Fallback to low accuracy.
+        console.warn("High accuracy geolocation timed out. Retrying with enableHighAccuracy: false...");
         try {
-          const updates = { latitude, longitude };
-          await updateDoc(doc(db, 'users', user.uid), updates);
-          if (user.role === 'buyer') {
-            await updateDoc(doc(db, 'buyers', user.uid), updates).catch(() => {});
-          } else if (user.role === 'seller') {
-            await updateDoc(doc(db, 'sellers', user.uid), updates).catch(() => {});
-          }
-          console.log("Updated device coordinates in Firestore user profile.");
-        } catch (err) {
-          console.error("Failed to update coordinates in Firestore profile:", err);
+          const position = await getPosition({ enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 });
+          await handleSuccess(position);
+        } catch (retryError) {
+          await handleError(retryError);
         }
-        setShowLocationModal(false);
-      },
-      async (error) => {
-        let errorMessage = 'Failed to fetch location';
-        if (error.code === 1) errorMessage = 'Location access denied by user';
-        else if (error.code === 2) errorMessage = 'Location unavailable';
-        else if (error.code === 3) errorMessage = 'Location fetch timeout';
-        await handleIPFallback(errorMessage);
-      },
-      { enableHighAccuracy: true, timeout: 6000, maximumAge: 30000 }
-    );
+      } else {
+        await handleError(error);
+      }
+    }
   };
 
   // Check browser geolocation permission status to decide if we show the custom modal or trigger fallbacks
@@ -454,7 +509,7 @@ export const Home = () => {
               📍 {userCoords.latitude.toFixed(5)}, {userCoords.longitude.toFixed(5)}
             </span>
             <button
-              onClick={requestGeoLocation}
+              onClick={() => requestGeoLocation(true)}
               className="px-2.5 py-1 bg-white/5 hover:bg-white/10 text-[10px] font-semibold text-primary-500 hover:text-primary-400 border border-white/10 hover:border-primary-500/30 rounded-lg transition-all cursor-pointer flex items-center gap-1"
               title="Recalculate location coordinates"
             >

@@ -109,8 +109,9 @@ const AppContent = () => {
       'b', 'a'
     ];
     const swipeKonamiCode = [
-      'SwipeUp', 'SwipeUp',
-      'SwipeDown', 'SwipeDown',
+      'SwipeLeft', 'SwipeRight',
+      'SwipeLeft', 'SwipeRight',
+      'SwipeLeft', 'SwipeRight',
       'SwipeLeft', 'SwipeRight',
       'SwipeLeft', 'SwipeRight'
     ];
@@ -459,7 +460,7 @@ const AppContent = () => {
 
             <div className="space-y-2">
               <h2 className="animated-name">
-                Vinayak Asole
+                vinayak_uv
               </h2>
               <p className="text-xs text-gray-300 font-mono">
                 Lead Creator & Full-Stack Architect
@@ -476,6 +477,16 @@ const AppContent = () => {
                   className="text-primary-400 hover:text-primary-300 underline font-bold transition-colors cursor-pointer"
                 >
                   @VinayakAsole
+                </a>
+              </p>
+              <p>
+                INSTAGRAM: <a 
+                  href="https://www.instagram.com/vinayak____uv/" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="text-primary-400 hover:text-primary-300 underline font-bold transition-colors cursor-pointer"
+                >
+                  @vinayak____uv
                 </a>
               </p>
               <p className="text-emerald-400 font-bold uppercase animate-pulse">

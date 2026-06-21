@@ -100,3 +100,11 @@ Community leaderboard computing rescued meals, saved CO₂ (2.5 kg per meal), wa
    ```bash
    npm run deploy
    ```
+
+---
+
+## 📄 License & Copyright
+
+Copyright © 2026 [Vinayak Asole](https://github.com/VinayakAsole). All rights reserved.
+
+Licensed under the [MIT License](LICENSE).
