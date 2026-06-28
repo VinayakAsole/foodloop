@@ -7,10 +7,7 @@ import {
   getDocs, 
   query, 
   where, 
-  runTransaction,
-  deleteDoc,
-  orderBy,
-  limit
+  runTransaction
 } from 'firebase/firestore';
 import { db } from './config';
 import { calculateTrustScore } from '../utils/trustScore';

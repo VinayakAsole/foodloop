@@ -241,15 +241,15 @@ const AppContent = () => {
 
   return (
     <div className={`min-h-screen text-gray-100 flex flex-col relative overflow-hidden transition-colors duration-500 ${
-      isAuthPage ? 'bg-[#090a0f]' : 'bg-moody bg-fixed'
+      isAuthPage ? 'bg-[#080a12]' : 'bg-moody bg-fixed'
     }`}>
       {/* Global Darkening Overlay (disabled on Auth page to prevent double overlays) */}
       {!isAuthPage && <div className="absolute inset-0 bg-overlay pointer-events-none z-0"></div>}
 
-      {/* Background decorative glow blobs */}
-      <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] max-w-[600px] max-h-[600px] bg-primary-500/8 rounded-full blur-[120px] pointer-events-none z-0"></div>
-      <div className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] max-w-[600px] max-h-[600px] bg-secondary-500/8 rounded-full blur-[140px] pointer-events-none z-0"></div>
-      <div className="absolute top-[35%] right-[20%] w-[30vw] h-[30vw] max-w-[400px] max-h-[400px] bg-tertiary-500/4 rounded-full blur-[100px] pointer-events-none z-0"></div>
+      {/* Animated floating glow blobs */}
+      <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] max-w-[600px] max-h-[600px] bg-primary-500/8 rounded-full blur-[120px] pointer-events-none z-0 animate-float-slow"></div>
+      <div className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] max-w-[600px] max-h-[600px] bg-secondary-500/8 rounded-full blur-[140px] pointer-events-none z-0 animate-float-delayed"></div>
+      <div className="absolute top-[35%] right-[20%] w-[30vw] h-[30vw] max-w-[400px] max-h-[400px] bg-tertiary-500/4 rounded-full blur-[100px] pointer-events-none z-0 animate-float-drift"></div>
 
       <Navbar collapsed={sidebarCollapsed} setCollapsed={setSidebarCollapsed} />
       <main className={`flex-grow pb-28 md:pb-12 relative z-10 ${

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { 
   requestNotificationPermission, 
@@ -16,14 +16,13 @@ import {
 
 export const Notifications = () => {
   const { user } = useAuth();
-  const [logs, setLogs] = useState([]);
+  const [logs, setLogs] = useState(() => {
+    return JSON.parse(localStorage.getItem('foodloop_notification_logs') || '[]');
+  });
   const [token, setToken] = useState(null);
 
   // Initialize notifications logs from LocalStorage
   useEffect(() => {
-    const cachedLogs = JSON.parse(localStorage.getItem('foodloop_notification_logs') || '[]');
-    setLogs(cachedLogs);
-
     // Listen to real notification events
     const unsubscribe = onMessageListener((payload) => {
       const newLog = {
@@ -64,7 +63,7 @@ export const Notifications = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6 md:px-8 space-y-6">
+    <div className="min-h-screen bg-[#060709] max-w-4xl mx-auto px-4 py-6 md:px-8 space-y-6">
       
       <div className="flex items-center justify-between border-b border-white/5 pb-4">
         <div>
@@ -86,7 +85,7 @@ export const Notifications = () => {
 
       <div className="space-y-6">
         {token && (
-          <div className="glass-panel p-5 rounded-2xl border border-white/10 space-y-2">
+          <div className="responsive-card p-5 space-y-2">
             <span className="text-[10px] text-gray-400 uppercase tracking-wider block font-bold">FCM Web Push Registration Token</span>
             <div className="flex gap-2">
               <input
@@ -129,7 +128,7 @@ export const Notifications = () => {
               {logs.map((log) => (
                 <div 
                   key={log.id} 
-                  className="glass-panel p-4 rounded-xl border border-white/5 flex gap-3 animate-slide-in"
+                  className="responsive-card p-4 flex gap-3 animate-slide-in"
                 >
                   <div className={`p-2 rounded-lg shrink-0 ${
                     log.type === 'success' ? 'bg-secondary-500/10 text-secondary-500' :
@@ -152,7 +151,7 @@ export const Notifications = () => {
               ))}
             </div>
           ) : (
-            <div className="glass-panel p-16 text-center text-gray-400 rounded-2xl flex flex-col items-center justify-center">
+            <div className="responsive-card p-16 text-center text-gray-400 flex flex-col items-center justify-center">
               <Bell size={40} className="text-gray-600 mb-2" />
               <p className="text-xs">No notifications captured yet.</p>
               <p className="text-[10px] text-gray-500 mt-1">Real-time alerts received while using the app will be logged here.</p>

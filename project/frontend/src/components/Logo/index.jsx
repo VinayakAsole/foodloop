@@ -1,4 +1,3 @@
-import React from 'react';
 
 /**
  * Premium custom logo icon matching the double-loop design from screenshots/landing_page_screenshot.png

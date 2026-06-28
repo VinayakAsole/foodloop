@@ -40,6 +40,14 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ── Buyers ──
+    match /buyers/{buyerId} {
+      allow read: if isAuth();
+      allow create: if isOwner(buyerId);
+      allow update: if isOwner(buyerId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
     // ── Food Listings ──
     match /foods/{foodId} {
       allow read: if true;                                           // Public browsing

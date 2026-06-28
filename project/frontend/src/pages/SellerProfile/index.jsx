@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
+import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { getUserProfile } from '../../firebase/auth';
 import { getSellerFoods, getSellerReviews } from '../../firebase/firestore';
@@ -14,7 +14,6 @@ import {
   Star,
   MapPin,
   MessageSquare,
-  Clock,
   ArrowLeft,
   AlertCircle,
   UtensilsCrossed,
@@ -23,7 +22,6 @@ import {
 
 export const SellerProfile = () => {
   const { sellerId } = useParams();
-  const navigate = useNavigate();
   const { user } = useAuth();
 
   const [seller, setSeller] = useState(null);
@@ -35,6 +33,17 @@ export const SellerProfile = () => {
 
   // Chat coordination state
   const [isChatOpen, setIsChatOpen] = useState(false);
+
+  // Haversine calculation user coordinates
+  const userCoords = useMemo(() => {
+    if (!user) return null;
+    const lat = parseFloat(user.latitude);
+    const lng = parseFloat(user.longitude);
+    if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) {
+      return null;
+    }
+    return { latitude: lat, longitude: lng };
+  }, [user]);
 
   useEffect(() => {
     const fetchSellerData = async () => {
@@ -94,17 +103,6 @@ export const SellerProfile = () => {
     );
   }
 
-  // Haversine calculation user coordinates
-  const userCoords = React.useMemo(() => {
-    if (!user) return null;
-    const lat = parseFloat(user.latitude);
-    const lng = parseFloat(user.longitude);
-    if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) {
-      return null;
-    }
-    return { latitude: lat, longitude: lng };
-  }, [user?.latitude, user?.longitude]);
-
   // Check kitchen status badge styling
   const getKitchenStatusBadge = (status) => {
     const kStatus = status || seller.kitchenStatus || 'ready';
@@ -136,7 +134,7 @@ export const SellerProfile = () => {
         
         {/* Left Side: Kitchen Info Summary Card */}
         <div className="lg:col-span-4 space-y-6">
-          <TiltCard className="glass-panel p-6 rounded-3xl border border-white/10 flex flex-col items-center text-center relative overflow-hidden shadow-2xl">
+          <TiltCard className="responsive-card p-6 flex flex-col items-center text-center relative overflow-hidden shadow-2xl">
             {/* Background Glow */}
             <div className="absolute top-0 left-0 w-24 h-24 bg-primary-500/5 rounded-full blur-2xl"></div>
 
@@ -199,7 +197,7 @@ export const SellerProfile = () => {
 
           {/* Kitchen Location Map Card */}
           {seller.latitude && seller.longitude && (
-            <div className="glass-panel p-4 rounded-3xl border border-white/10 shadow-xl space-y-3">
+            <div className="responsive-card p-4 shadow-xl space-y-3">
               <div className="flex items-center justify-between border-b border-white/5 pb-2">
                 <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Kitchen Location</span>
                 <span className="text-[10px] text-gray-500 flex items-center gap-1">
@@ -262,7 +260,7 @@ export const SellerProfile = () => {
                 ))}
               </div>
             ) : (
-              <div className="glass-panel p-12 rounded-3xl border border-white/5 text-center flex flex-col items-center justify-center">
+              <div className="responsive-card p-12 text-center flex flex-col items-center justify-center">
                 <UtensilsCrossed size={40} className="text-gray-500 mb-3" />
                 <h3 className="text-md font-bold text-white">No active menu listings</h3>
                 <p className="text-xs text-gray-400 mt-1 max-w-sm">
@@ -274,11 +272,11 @@ export const SellerProfile = () => {
             reviews.length > 0 ? (
               <div className="space-y-4">
                 {reviews.map((rev) => (
-                  <div key={rev.id} className="glass-panel p-5 rounded-2xl border border-white/5 space-y-2.5">
+                  <div key={rev.id} className="responsive-card p-5 space-y-2.5">
                     <div className="flex justify-between items-start">
                       <div>
                         <span className="text-xs font-bold text-white block">{rev.buyerName || 'Verified Buyer'}</span>
-                        <span className="text-[9px] text-gray-500">{new Date(rev.createdAt || Date.now()).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                        <span className="text-[9px] text-gray-500">{new Date(rev.createdAt || 0).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                       </div>
                       <div className="flex text-tertiary-500 bg-tertiary-500/5 px-2 py-1 rounded-lg border border-tertiary-500/10">
                         {Array.from({ length: rev.rating || 5 }).map((_, i) => (
@@ -302,7 +300,7 @@ export const SellerProfile = () => {
                 ))}
               </div>
             ) : (
-              <div className="glass-panel p-12 rounded-3xl border border-white/5 text-center flex flex-col items-center justify-center">
+              <div className="responsive-card p-12 text-center flex flex-col items-center justify-center">
                 <Star size={40} className="text-gray-500 mb-3" />
                 <h3 className="text-md font-bold text-white">No reviews posted yet</h3>
                 <p className="text-xs text-gray-400 mt-1 max-w-sm">

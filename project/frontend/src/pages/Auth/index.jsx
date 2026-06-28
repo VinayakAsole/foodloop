@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useGeolocation } from '../../hooks/useGeolocation';
@@ -12,8 +12,6 @@ import {
   User, 
   Phone, 
   MapPin, 
-  ChefHat, 
-  ShoppingBag, 
   ShieldAlert, 
   Compass, 
   RefreshCw,
@@ -24,7 +22,7 @@ import {
 export const Auth = () => {
   const navigate = useNavigate();
   const { login, loginWithGoogle, register, sendOtpToPhone, resetPassword } = useAuth();
-  const { coords, loading: geoLoading, getCoordinates, error: geoError } = useGeolocation();
+  const { loading: geoLoading, getCoordinates } = useGeolocation();
 
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
@@ -85,7 +83,7 @@ export const Auth = () => {
     try {
       const url = await uploadImage(file, 'profiles');
       setProfilePhoto(url);
-    } catch (err) {
+    } catch {
       setError("Failed to upload profile photo.");
     } finally {
       setPhotoUploading(false);
@@ -261,7 +259,7 @@ export const Auth = () => {
         </header>
 
         {/* Main glass card */}
-        <div className="w-full glass-card rounded-[2.5rem] p-6 md:p-8 flex flex-col items-center">
+        <div className="w-full responsive-card rounded-[2.5rem] p-6 md:p-8 flex flex-col items-center">
           
           {error && (
             <div className="w-full mb-5 text-xs font-semibold text-rose-300 bg-rose-500/10 border border-rose-500/25 p-3.5 rounded-[1.25rem]">
@@ -664,7 +662,7 @@ export const Auth = () => {
                 </div>
 
                 {/* Geolocation Coordinates */}
-                <div className="space-y-1.5 p-4 rounded-[1.5rem] border border-white/5 bg-white/5 w-full text-left">
+                <div className="space-y-1.5 p-4 rounded-[1.5rem] responsive-card w-full text-left">
                   <div className="flex items-center justify-between">
                     <label className="text-[10px] font-bold uppercase text-gray-400 flex items-center space-x-1">
                       <MapPin size={12} className="text-[#FF6B35]" />
@@ -702,7 +700,7 @@ export const Auth = () => {
 
                 {/* Home Cook Seller-Only Fields */}
                 {role === 'seller' && (
-                  <div className="p-4 glass-card rounded-[1.5rem] space-y-4 text-left w-full">
+                  <div className="p-4 responsive-card rounded-[1.5rem] space-y-4 text-left w-full">
                     <div className="flex items-center gap-2 mb-1">
                       <span>👨‍🍳</span>
                       <h3 className="font-display font-semibold text-white text-sm">Seller Additional Info</h3>

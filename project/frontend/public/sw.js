@@ -1,12 +1,11 @@
-const CACHE_NAME = 'foodloop-v1';
+const CACHE_NAME = 'foodloop-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
-  '/src/main.jsx',
-  '/src/App.jsx',
-  '/src/index.css',
   '/manifest.json',
-  '/favicon.svg'
+  '/favicon.svg',
+  '/logo192.png',
+  '/logo512.png'
 ];
 
 // Install Event
@@ -37,19 +36,34 @@ self.addEventListener('activate', (event) => {
 
 // Fetch Event - Network first, fallback to Cache
 self.addEventListener('fetch', (event) => {
-  // Avoid caching non-GET requests or Firebase API calls
-  if (event.request.method !== 'GET' || event.request.url.includes('firestore.googleapis.com')) {
+  // Only handle GET requests
+  if (event.request.method !== 'GET') return;
+
+  const url = new URL(event.request.url);
+
+  // Bypass Firebase API/Auth calls, chrome extensions, and Vite dev/HMR assets
+  if (
+    !url.protocol.startsWith('http') ||
+    url.pathname.includes('chrome-extension') ||
+    url.hostname.includes('firestore.googleapis.com') ||
+    url.hostname.includes('identitytoolkit.googleapis.com') ||
+    url.pathname.startsWith('/@') || 
+    url.pathname.includes('node_modules') ||
+    url.pathname.includes('hot-update')
+  ) {
     return;
   }
 
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // Clone response and cache it
-        const responseClone = response.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseClone);
-        });
+        // Only cache successful standard responses
+        if (response && response.status === 200 && response.type === 'basic') {
+          const responseClone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseClone);
+          });
+        }
         return response;
       })
       .catch(() => {
@@ -58,7 +72,7 @@ self.addEventListener('fetch', (event) => {
           if (cachedResponse) {
             return cachedResponse;
           }
-          // If a page route, fallback to index.html (SPA routing support)
+          // If page navigation fails, return the cached index.html
           if (event.request.mode === 'navigate') {
             return caches.match('/index.html');
           }

@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Playwright & Scratch Directories
+playwright-report/
+test-results/
+scratch/
+.env.local
+.env.*.local
+

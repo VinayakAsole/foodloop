@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X, Send, MessageSquare, Sparkles } from 'lucide-react';
 import { sendChatMessage, subscribeToChat } from '../../firebase/rtdb';
 

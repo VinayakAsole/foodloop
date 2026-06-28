@@ -1,4 +1,3 @@
-import React from 'react';
 
 export const EcoTreeSvg = ({ stage = 'Seedling' }) => {
   // Define dimensions and viewBox

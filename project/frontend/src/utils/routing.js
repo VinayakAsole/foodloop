@@ -42,7 +42,7 @@ export const fetchWalkingRoute = async (start, end) => {
       const street = step.name ? `on ${step.name}` : '';
       
       // Simple instruction synthesis
-      let instruction = '';
+      let instruction;
       if (type === 'depart') {
         instruction = `Head ${modifier} ${street}`.trim();
       } else if (type === 'arrive') {

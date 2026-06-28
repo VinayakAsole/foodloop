@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { getAvailableFoods, createOrder, addToFavorites, removeFromFavorites, isItemFavorited } from '../../firebase/firestore';
@@ -7,6 +7,7 @@ import MapView from '../../components/MapView';
 import LiveCounter from '../../components/LiveCounter';
 import TrustScore from '../../components/TrustScore';
 import TiltCard from '../../components/TiltCard';
+import PaymentGatewayModal from '../../components/PaymentGatewayModal';
 import { 
   ArrowLeft, 
   Clock, 
@@ -14,8 +15,6 @@ import {
   Phone, 
   ShoppingBag, 
   ChefHat, 
-  ShieldCheck, 
-  CheckCircle2, 
   AlertTriangle,
   RefreshCw,
   Star,
@@ -33,6 +32,7 @@ export const FoodDetail = () => {
   const [quantity, setQuantity] = useState(1);
   const [orderSubmitting, setOrderSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   // Time remaining states
   const [timeLeft, setTimeLeft] = useState('');
@@ -89,7 +89,7 @@ export const FoodDetail = () => {
         } else {
           setError("This food listing has sold out or expired.");
         }
-      } catch (err) {
+      } catch {
         setError("Error loading food details.");
       } finally {
         setLoading(false);
@@ -129,7 +129,7 @@ export const FoodDetail = () => {
     return () => clearInterval(timer);
   }, [food]);
 
-  const userCoords = React.useMemo(() => {
+  const userCoords = useMemo(() => {
     if (!user) return null;
     const lat = parseFloat(user.latitude);
     const lng = parseFloat(user.longitude);
@@ -137,7 +137,7 @@ export const FoodDetail = () => {
       return null;
     }
     return { latitude: lat, longitude: lng };
-  }, [user?.latitude, user?.longitude]);
+  }, [user]);
 
   const distance = userCoords && food?.location
     ? calculateDistance(
@@ -148,16 +148,7 @@ export const FoodDetail = () => {
       )
     : null;
 
-  const handlePlaceOrder = async () => {
-    if (!user) {
-      navigate('/auth');
-      return;
-    }
-    if (user.role !== 'buyer') {
-      setError("Only Buyers can purchase food items.");
-      return;
-    }
-
+  const executePlaceOrder = async (isPaid = false) => {
     setOrderSubmitting(true);
     setError(null);
 
@@ -173,7 +164,8 @@ export const FoodDetail = () => {
         sellerName: food.sellerName,
         isDonation: food.isDonation,
         location: food.location,
-        category: food.category || ''
+        category: food.category || '',
+        paymentStatus: isPaid ? 'Paid' : 'Free Donation'
       };
 
       await createOrder(orderPayload);
@@ -194,6 +186,23 @@ export const FoodDetail = () => {
       setError(err.message || "Checkout failed. Stock count might have changed.");
     } finally {
       setOrderSubmitting(false);
+    }
+  };
+
+  const handlePlaceOrder = async () => {
+    if (!user) {
+      navigate('/auth');
+      return;
+    }
+    if (user.role !== 'buyer') {
+      setError("Only Buyers can purchase food items.");
+      return;
+    }
+
+    if (!food.isDonation && food.price > 0) {
+      setShowPaymentModal(true);
+    } else {
+      await executePlaceOrder(false);
     }
   };
 
@@ -224,7 +233,7 @@ export const FoodDetail = () => {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6 md:px-8 space-y-6">
+    <div className="min-h-screen bg-[#060709] max-w-5xl mx-auto px-4 py-6 md:px-8 space-y-6">
       {/* Back link & Favorite Button */}
       <div className="flex justify-between items-center">
         <Link to="/" className="inline-flex items-center space-x-1.5 text-xs text-gray-400 hover:text-white transition">
@@ -272,7 +281,7 @@ export const FoodDetail = () => {
           </div>
 
           {/* Core Info Panel */}
-          <div className="glass-panel p-6 rounded-2xl border border-white/10 space-y-4">
+          <div className="responsive-card p-6 space-y-4">
             <div className="flex justify-between items-start">
               <div>
                 <h1 className="text-2xl font-black text-white">{food.foodName}</h1>
@@ -333,7 +342,7 @@ export const FoodDetail = () => {
         <div className="md:col-span-5 space-y-6">
           
           {/* Order Placement Panel */}
-           <TiltCard className="glass-panel p-6 rounded-2xl border border-primary-500/15 shadow-xl relative overflow-hidden">
+           <TiltCard className="responsive-card p-6 shadow-xl relative overflow-hidden">
             {/* Primary glow accent */}
             <div className="absolute top-0 right-0 w-24 h-24 bg-primary-500/5 rounded-full blur-2xl"></div>
 
@@ -423,7 +432,7 @@ export const FoodDetail = () => {
           </TiltCard>
 
           {/* Seller Location Map Panel - Enhanced */}
-          <div className="glass-panel p-4 rounded-2xl border border-white/10 space-y-3">
+          <div className="responsive-card p-4 space-y-3">
             <div className="flex items-center justify-between">
               <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center space-x-1.5">
                 <MapPin size={14} className="text-primary-500" />
@@ -503,7 +512,7 @@ export const FoodDetail = () => {
       </div>
 
       {/* Community Reviews & Handoff Photos */}
-      <div className="glass-panel p-6 rounded-2xl border border-white/10 space-y-4 mt-6">
+      <div className="responsive-card p-6 space-y-4 mt-6">
         <div className="flex items-center justify-between border-b border-white/5 pb-3">
           <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
             <Star className="text-tertiary-500 fill-current" size={16} />
@@ -554,6 +563,22 @@ export const FoodDetail = () => {
           </div>
         </div>
       </div>
+
+      <PaymentGatewayModal
+        isOpen={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        amount={food ? (food.isDonation ? 0 : food.price * quantity) : 0}
+        itemName={food ? food.foodName : ''}
+        quantity={quantity}
+        onPaymentSuccess={() => {
+          setShowPaymentModal(false);
+          executePlaceOrder(true);
+        }}
+        onPaymentError={(errText) => {
+          setShowPaymentModal(false);
+          setError(errText || "Payment failed. Please retry.");
+        }}
+      />
     </div>
   );
 };

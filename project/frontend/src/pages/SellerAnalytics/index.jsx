@@ -397,7 +397,7 @@ export const SellerAnalytics = () => {
         ].map(({ icon: Icon, color, bg, label, value }) => (
           <TiltCard 
             key={label} 
-            className="glass-panel p-5 rounded-2xl border border-white/5 hover:border-primary-500/20 hover:bg-white/[0.08] hover:-translate-y-1 hover:shadow-[0_8px_30px_rgba(0,0,0,0.12)] transition-all duration-300 group cursor-pointer flex items-center space-x-4"
+            className="responsive-card p-5 group cursor-pointer flex items-center space-x-4"
           >
             <div className={`p-3.5 ${bg} ${color} rounded-xl shrink-0 group-hover:scale-110 transition-transform duration-300`}><Icon size={20} /></div>
             <div>
@@ -409,7 +409,7 @@ export const SellerAnalytics = () => {
       </div>
 
       {/* ── Revenue Chart & Filters ─────────────────────────────────── */}
-      <div className="glass-panel p-6 rounded-3xl border border-white/10 space-y-4 hover:border-white/20 transition-all duration-300 relative z-10">
+      <div className="responsive-card p-6 space-y-4 relative z-10">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <h2 className="text-sm font-bold text-white flex items-center gap-2">
             <BarChart3 size={14} className="text-primary-500" />
@@ -454,7 +454,7 @@ export const SellerAnalytics = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
 
         {/* Top Selling Items */}
-        <div className="glass-panel p-6 rounded-3xl border border-white/10 space-y-4 hover:border-white/20 transition-all duration-300">
+        <div className="responsive-card p-6 space-y-4">
           <h2 className="text-sm font-bold text-white flex items-center justify-between gap-2 border-b border-white/5 pb-3">
             <div className="flex items-center gap-2">
               <Flame size={14} className="text-primary-500" />
@@ -497,7 +497,7 @@ export const SellerAnalytics = () => {
         </div>
 
         {/* Performance Metrics */}
-        <div className="glass-panel p-6 rounded-3xl border border-white/10 space-y-4 hover:border-white/20 transition-all duration-300">
+        <div className="responsive-card p-6 space-y-4">
           <h2 className="text-sm font-bold text-white flex items-center justify-between gap-2 border-b border-white/5 pb-3">
             <div className="flex items-center gap-2">
               <Target size={14} className="text-secondary-500" />
@@ -530,7 +530,7 @@ export const SellerAnalytics = () => {
       </div>
 
       {/* ── Customer Insights ────────────────────────────────────────── */}
-      <div className="glass-panel p-6 rounded-3xl border border-white/10 space-y-4 hover:border-white/20 transition-all duration-300 relative z-10">
+      <div className="responsive-card p-6 space-y-4 relative z-10">
         <h2 className="text-sm font-bold text-white flex items-center justify-between gap-2 border-b border-white/5 pb-3">
           <div className="flex items-center gap-2">
             <Users size={14} className="text-secondary-500" />

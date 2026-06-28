@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { doc, updateDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
@@ -52,8 +52,6 @@ export const ProfileSetup = () => {
   const [otpError, setOtpError] = useState(null);
   const [otpNotification, setOtpNotification] = useState(null);
 
-  // Handle Google logins that didn't populate a username
-  const username = user?.username || user?.email?.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '');
 
   const handleSendOtp = async (e) => {
     e.preventDefault();
@@ -126,7 +124,7 @@ export const ProfileSetup = () => {
     try {
       const url = await uploadImage(file, 'profiles');
       setProfilePhoto(url);
-    } catch (err) {
+    } catch {
       setError("Failed to upload profile image.");
     } finally {
       setPhotoUploading(false);
@@ -212,8 +210,8 @@ export const ProfileSetup = () => {
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center relative py-16 px-4 bg-moody pt-24 pb-28 md:pb-16">
-      <div className="absolute inset-0 bg-overlay pointer-events-none z-0"></div>
+    <div className="min-h-screen w-full flex items-center justify-center relative py-16 px-4 bg-[#060709] bg-moody pt-24 pb-28 md:pb-16">
+      <div className="absolute inset-0 bg-[#060709]/80 bg-overlay pointer-events-none z-0"></div>
 
       <div className="w-full max-w-xl mx-auto relative z-10 flex flex-col items-center">
         
@@ -259,7 +257,7 @@ export const ProfileSetup = () => {
         </div>
 
         {/* Glass Card Container */}
-        <div className="w-full glass-card rounded-[2.5rem] p-8 flex flex-col relative overflow-hidden shadow-2xl">
+        <div className="w-full responsive-card p-8 flex flex-col relative overflow-hidden shadow-2xl">
           
           {error && (
             <div className="w-full mb-6 text-xs font-semibold text-rose-300 bg-rose-500/10 border border-rose-500/25 p-4 rounded-[1.25rem] flex items-start gap-2.5">

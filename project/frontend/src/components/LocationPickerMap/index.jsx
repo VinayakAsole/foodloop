@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { MapPin, Navigation, RefreshCw, Search, Crosshair, X } from 'lucide-react';
@@ -192,32 +192,44 @@ export const LocationPickerMap = ({
     onLocationChangeRef.current = onLocationChange;
   }, [onLocationChange]);
 
+  const onAddressResolvedRef = useRef(onAddressResolved);
+  useEffect(() => {
+    onAddressResolvedRef.current = onAddressResolved;
+  }, [onAddressResolved]);
+
+  const selectedLat = selectedLocation?.[0];
+  const selectedLng = selectedLocation?.[1];
+
   // Reverse geocode whenever selected location changes
   useEffect(() => {
-    if (!selectedLocation) {
-      setResolvedAddress(null);
-      return;
+    if (selectedLat === undefined || selectedLng === undefined) {
+      const timer = setTimeout(() => {
+        setResolvedAddress(prev => prev === null ? prev : null);
+      }, 0);
+      return () => clearTimeout(timer);
     }
     let cancelled = false;
     const doReverse = async () => {
       setAddressLoading(true);
-      const addr = await reverseGeocode(selectedLocation[0], selectedLocation[1]);
+      const addr = await reverseGeocode(selectedLat, selectedLng);
       if (!cancelled) {
         setResolvedAddress(addr);
         setAddressLoading(false);
-        if (onAddressResolved) onAddressResolved(addr);
+        if (onAddressResolvedRef.current) onAddressResolvedRef.current(addr);
       }
     };
     doReverse();
     return () => { cancelled = true; };
-  }, [selectedLocation?.[0], selectedLocation?.[1]]);
+  }, [selectedLat, selectedLng]);
 
   // Forward geocode search
   useEffect(() => {
     if (!debouncedSearch || debouncedSearch.length < 3) {
-      setSearchResults([]);
-      setShowSearchResults(false);
-      return;
+      const timer = setTimeout(() => {
+        setSearchResults(prev => prev.length === 0 ? prev : []);
+        setShowSearchResults(prev => prev === false ? prev : false);
+      }, 0);
+      return () => clearTimeout(timer);
     }
     let cancelled = false;
     const doSearch = async () => {
@@ -358,6 +370,19 @@ export const LocationPickerMap = ({
     setLocationError(null);
     onLocationChangeRef.current && onLocationChangeRef.current({ latitude, longitude });
   };
+
+  // Handle marker dragend
+  const handleMarkerDrag = useCallback((e) => {
+    const marker = e.target;
+    if (marker) {
+      const position = marker.getLatLng();
+      const latitude = position.lat;
+      const longitude = position.lng;
+      setSelectedLocation([latitude, longitude]);
+      setLocationError(null);
+      onLocationChangeRef.current && onLocationChangeRef.current({ latitude, longitude });
+    }
+  }, []);
 
   // Handle search result selection
   const handleSearchResultSelect = (result) => {
@@ -534,7 +559,14 @@ export const LocationPickerMap = ({
 
           {/* Pinned pickup location marker (orange pin) */}
           {selectedLocation && (
-            <Marker position={selectedLocation} icon={selectedIcon}>
+            <Marker 
+              position={selectedLocation} 
+              icon={selectedIcon}
+              draggable={!readOnly}
+              eventHandlers={{
+                dragend: handleMarkerDrag
+              }}
+            >
               <Popup>
                 <div className="text-xs p-1 text-gray-800">
                   <p className="font-bold text-orange-600">📍 Meal Pickup Point</p>

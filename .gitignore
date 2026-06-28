@@ -29,3 +29,12 @@ project/frontend/.env.*
 # OS metadata
 .DS_Store
 Thumbs.db
+
+# Playwright E2E & scratch folders
+project/frontend/playwright-report/
+project/frontend/test-results/
+project/frontend/scratch/
+**/playwright-report/
+**/test-results/
+**/scratch/
+

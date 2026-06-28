@@ -1,16 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { 
   Home, 
   ShoppingBag, 
   PlusCircle, 
-  Map, 
   Heart,
   User, 
   Bell, 
   LogOut, 
-  ChefHat,
   Sparkles,
   LayoutDashboard,
   BarChart3,
@@ -33,7 +31,10 @@ export const BottomNav = () => {
 
   // Close popover on route change
   useEffect(() => {
-    setShowProfileMenu(false);
+    const timer = setTimeout(() => {
+      setShowProfileMenu(prev => prev ? false : prev);
+    }, 0);
+    return () => clearTimeout(timer);
   }, [location.pathname, location.search]);
 
   // If no user is logged in, do not show bottom navigation

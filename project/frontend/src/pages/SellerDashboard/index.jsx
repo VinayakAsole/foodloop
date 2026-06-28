@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { 
@@ -23,14 +23,13 @@ import { db } from '../../firebase/config';
 import { fetchIPLocation } from '../../utils/geolocationFallback';
 import { subscribeToChat } from '../../firebase/rtdb';
 import ChatDrawer from '../../components/ChatDrawer';
-import TiltCard from '../../components/TiltCard';
+
 import { 
   Plus, 
   TrendingUp, 
   ShoppingBag, 
   LayoutDashboard,
   BarChart3, 
-  Gift, 
   Trash2, 
   Sparkles, 
   Camera, 
@@ -38,12 +37,8 @@ import {
   AlertCircle,
   Clock,
   CheckCircle2,
-  DollarSign,
   ChefHat,
-  FileSpreadsheet,
-  Download,
   X,
-  MapPin,
   Image as ImageIcon,
   MessageSquare,
   ChevronDown,
@@ -115,7 +110,7 @@ export const SellerDashboard = () => {
     };
 
     checkAndUpgradeLocation();
-  }, [user?.uid, user?.latitude, user?.longitude]);
+  }, [user?.uid, user?.latitude, user?.longitude, user, updateProfileState]);
 
   const activeTab = searchParams.get('tab') || 'dashboard'; // 'dashboard' or 'orders'
   const [foods, setFoods]             = useState([]);
@@ -138,10 +133,6 @@ export const SellerDashboard = () => {
   // ── Image ────────────────────────────────────────────────────────────
   const [foodImage,    setFoodImage]    = useState(null);   // File object
   const [imagePreview, setImagePreview] = useState(null);   // blob URL
-
-  // ── Location ─────────────────────────────────────────────────────────
-  const [pickedLocation, setPickedLocation] = useState(null);
-  const [resolvedAddress, setResolvedAddress] = useState(null);
 
   // ── AI hint (non-blocking, purely cosmetic) ──────────────────────────
   const [aiLoading, setAiLoading]           = useState(false);
@@ -169,7 +160,7 @@ export const SellerDashboard = () => {
   const [postingAnnouncement, setPostingAnnouncement] = useState(false);
   const [isAnnouncementsOpen, setIsAnnouncementsOpen] = useState(false);
 
-  const fetchAnnouncements = async () => {
+  const fetchAnnouncements = useCallback(async () => {
     if (!user) return;
     try {
       const data = await getSellerAnnouncements(user.uid);
@@ -177,13 +168,14 @@ export const SellerDashboard = () => {
     } catch (e) {
       console.error("Failed to load announcements:", e);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
-    if (user) {
+    const timer = setTimeout(() => {
       fetchAnnouncements();
-    }
-  }, [user]);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [fetchAnnouncements]);
 
   const handlePostAnnouncement = async (e) => {
     e.preventDefault();
@@ -219,12 +211,6 @@ export const SellerDashboard = () => {
     setExpiryHours('4');
     setFoodImage(null);
     setImagePreview(null);
-    if (foodItem.location) {
-      setPickedLocation({
-        latitude: foodItem.location.latitude,
-        longitude: foodItem.location.longitude
-      });
-    }
   };
 
   const playOrderSound = () => {
@@ -257,13 +243,13 @@ export const SellerDashboard = () => {
   };
 
   // ─── Load seller data ─────────────────────────────────────────────────
-  const loadSellerData = async () => {
+  const loadSellerData = useCallback(async () => {
     if (!user) {
       console.warn("[SellerDashboard loadSellerData] Skipped: user is null/undefined");
       return;
     }
     console.log("[SellerDashboard loadSellerData] Loading dashboard data for seller UID:", user.uid);
-    setLoading(true);
+    setLoading(prev => prev ? prev : true);
     try {
       // Still load foods manually
       const foodsData = await getSellerFoods(user.uid);
@@ -283,13 +269,15 @@ export const SellerDashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
   // Real-time Firestore active orders listener for Sellers
   useEffect(() => {
     if (!user) return;
     
-    setLoading(true);
+    const timer = setTimeout(() => {
+      setLoading(prev => prev ? prev : true);
+    }, 0);
     const q = query(collection(db, 'orders'), where('sellerId', '==', user.uid));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -323,7 +311,10 @@ export const SellerDashboard = () => {
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      clearTimeout(timer);
+      unsubscribe();
+    };
   }, [user]);
 
   // Background Chat Notifications for Sellers
@@ -364,9 +355,14 @@ export const SellerDashboard = () => {
     return () => {
       unsubscribes.forEach(unsub => unsub());
     };
-  }, [orders, user?.uid, activeChatOrderId, isChatOpen]);
+  }, [orders, user, activeChatOrderId, isChatOpen]);
 
-  useEffect(() => { loadSellerData(); }, [user?.uid]);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadSellerData();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [loadSellerData]);
 
   // ─── Reset form helper ────────────────────────────────────────────────
   const resetForm = () => {
@@ -378,58 +374,30 @@ export const SellerDashboard = () => {
     setCategory('Lunch');
     setFoodImage(null);
     setImagePreview(null);
-    setPickedLocation(null);
-    setResolvedAddress(null);
     setAiMessage(null);
     setAiLoading(false);
     setPriceRecommendation(null);
     setSubmitError(null);
   };
 
-  const openForm = async () => {
+  const openForm = useCallback(() => {
     resetForm();
     setShowAddForm(true);
-
-    const isSecure = window.location.protocol === 'https:' || 
-                     window.location.hostname === 'localhost' || 
-                     window.location.hostname === '127.0.0.1';
-
-    const getIPLocationCoords = async () => {
-      const ipCoords = await fetchIPLocation();
-      if (ipCoords) {
-        setPickedLocation(ipCoords);
-      }
-    };
-
-    if ('geolocation' in navigator && isSecure) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setPickedLocation({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude
-          });
-        },
-        async (err) => {
-          console.warn("GPS failed in openForm, trying IP fallback:", err.message);
-          await getIPLocationCoords();
-        },
-        { enableHighAccuracy: true, timeout: 5000, maximumAge: 30000 }
-      );
-    } else {
-      await getIPLocationCoords();
-    }
-  };
+  }, []);
 
   const closeForm = () => { resetForm(); setShowAddForm(false); };
 
   useEffect(() => {
     if (searchParams.get('add') === 'true') {
-      openForm();
+      const timer = setTimeout(() => {
+        openForm();
+      }, 0);
       const newParams = new URLSearchParams(searchParams);
       newParams.delete('add');
       setSearchParams(newParams, { replace: true });
+      return () => clearTimeout(timer);
     }
-  }, [searchParams]);
+  }, [searchParams, openForm, setSearchParams]);
 
   // ─── Image picker — resize + quick AI hint ───────────────────────────
   const handleImageChange = async (e) => {
@@ -462,7 +430,7 @@ export const SellerDashboard = () => {
       }).catch(() => {
         setFoodImage(file);
       });
-    } catch (_) {
+    } catch {
       setFoodImage(file);
     }
 
@@ -480,7 +448,7 @@ export const SellerDashboard = () => {
 
         setAiMessage(`${hint} — fill in details below.`);
         setPriceRecommendation(CATEGORY_PRICES[category] || 50);
-      } catch (_) { /* ignore */ }
+      } catch { /* ignore */ }
       setAiLoading(false);
     }, 500);
   };
@@ -492,7 +460,7 @@ export const SellerDashboard = () => {
       try {
         const avg = await getCategoryAveragePrice(category);
         setPriceRecommendation(avg || CATEGORY_PRICES[category] || 50);
-      } catch (_) {
+      } catch {
         setPriceRecommendation(CATEGORY_PRICES[category] || 50);
       }
     }, 800);
@@ -628,8 +596,9 @@ export const SellerDashboard = () => {
     (f.remainingQuantity ?? 0) <= 0
   );
   const totalOrders     = orders.length;
-  const completedOrders = orders.filter(o => o.status === 'completed').length;
   const pendingOrders   = orders.filter(o => o.status === 'placed' || o.status === 'preparing' || o.status === 'ready_for_pickup');
+  const totalSales = orders.filter(o => o.status === 'completed').reduce((sum, o) => sum + (parseFloat(o.totalPrice) || 0), 0);
+  const mealsSaved = orders.filter(o => o.status === 'completed').reduce((sum, o) => sum + (parseInt(o.quantity, 10) || 0), 0);
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 md:px-8 space-y-6">
@@ -710,31 +679,95 @@ export const SellerDashboard = () => {
       {/* ── Dashboard view contents ── */}
       {activeTab === 'dashboard' && (
         <>
-          {/* ── Trust Score ───────────────────────────────────────────────── */}
-          {user?.trustScore !== undefined && (
-            <TrustScore score={user.trustScore} />
-          )}
-
-          {/* ── Stats cards ───────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { icon: ShoppingBag, color: 'text-blue-400',      bg: 'bg-blue-500/10',      label: 'Active Listings',   value: activeFoods.length },
-          { icon: Clock,       color: 'text-amber-400',     bg: 'bg-amber-500/10',     label: 'Pending Orders',    value: pendingOrders.length },
-          { icon: CheckCircle2,color: 'text-secondary-500', bg: 'bg-secondary-500/10', label: 'Completed',         value: completedOrders },
-          { icon: TrendingUp,  color: 'text-primary-500',   bg: 'bg-primary-500/10',   label: 'Total Orders',      value: totalOrders },
-        ].map(({ icon: Icon, color, bg, label, value }) => (
-          <TiltCard key={label} className="glass-panel p-4 rounded-xl border border-white/5 flex items-center space-x-3">
-            <div className={`p-3 ${bg} ${color} rounded-lg shrink-0`}><Icon size={20} /></div>
-            <div>
-              <span className="text-[10px] text-gray-400 uppercase tracking-wider block font-semibold">{label}</span>
-              <span className="text-lg font-black text-white">{value}</span>
+          {/* ── Stats cards & Bento Grid ─────────────────────────────────── */}
+          <div className="bento-grid">
+            {/* Total Sales Block - span 6 */}
+            <div className="responsive-card bento-col-6 p-6 flex flex-col justify-between min-h-[140px] relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-primary-500/5 rounded-full blur-2xl group-hover:bg-primary-500/10 transition-all duration-300"></div>
+              <div className="flex justify-between items-start">
+                <div>
+                  <span className="text-[10px] text-gray-400 uppercase tracking-wider block font-bold">Total Sales</span>
+                  <span className="text-3xl font-black text-white mt-1 block">₹{totalSales.toLocaleString('en-IN')}</span>
+                </div>
+                <div className="p-3 bg-primary-500/10 text-primary-500 rounded-xl shrink-0"><IndianRupee size={22} /></div>
+              </div>
+              <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1 mt-4">
+                <TrendingUp size={12} />
+                <span>Earnings from completed pickups</span>
+              </span>
             </div>
-          </TiltCard>
-        ))}
-      </div>
+
+            {/* Meals Saved Block - span 3 */}
+            <div className="responsive-card bento-col-3 p-6 flex flex-col justify-between min-h-[140px] relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-16 h-16 bg-secondary-500/5 rounded-full blur-xl group-hover:bg-secondary-500/10 transition-all duration-300"></div>
+              <div className="flex justify-between items-start">
+                <div>
+                  <span className="text-[10px] text-gray-400 uppercase tracking-wider block font-bold">Meals Saved</span>
+                  <span className="text-3xl font-black text-white mt-1 block">{mealsSaved}</span>
+                </div>
+                <div className="p-2.5 bg-secondary-500/10 text-secondary-500 rounded-lg shrink-0"><CheckCircle2 size={18} /></div>
+              </div>
+              <span className="text-[10px] text-gray-400 font-medium mt-4">Completed plates</span>
+            </div>
+
+            {/* Active Listings Block - span 3 */}
+            <div className="responsive-card bento-col-3 p-6 flex flex-col justify-between min-h-[140px] relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-16 h-16 bg-blue-500/5 rounded-full blur-xl group-hover:bg-blue-500/10 transition-all duration-300"></div>
+              <div className="flex justify-between items-start">
+                <div>
+                  <span className="text-[10px] text-gray-400 uppercase tracking-wider block font-bold">Active Listings</span>
+                  <span className="text-3xl font-black text-white mt-1 block">{activeFoods.length}</span>
+                </div>
+                <div className="p-2.5 bg-blue-500/10 text-blue-400 rounded-lg shrink-0"><ShoppingBag size={18} /></div>
+              </div>
+              <span className="text-[10px] text-gray-400 font-medium mt-4">Available on map</span>
+            </div>
+
+            {/* Pending Orders */}
+            <div className={`responsive-card ${user?.trustScore !== undefined ? 'bento-col-4' : 'bento-col-6'} p-6 flex flex-col justify-between min-h-[140px] relative overflow-hidden group`}>
+              <div className="absolute top-0 right-0 w-16 h-16 bg-amber-500/5 rounded-full blur-xl group-hover:bg-amber-500/10 transition-all duration-300"></div>
+              <div className="flex justify-between items-start">
+                <div>
+                  <span className="text-[10px] text-gray-400 uppercase tracking-wider block font-bold">Pending Orders</span>
+                  <span className="text-3xl font-black text-white mt-1 block">{pendingOrders.length}</span>
+                </div>
+                <div className="p-2.5 bg-amber-500/10 text-amber-400 rounded-lg shrink-0"><Clock size={18} /></div>
+              </div>
+              <span className="text-[10px] text-gray-400 font-medium mt-4">Require attention</span>
+            </div>
+
+            {/* Total Orders */}
+            <div className={`responsive-card ${user?.trustScore !== undefined ? 'bento-col-4' : 'bento-col-6'} p-6 flex flex-col justify-between min-h-[140px] relative overflow-hidden group`}>
+              <div className="absolute top-0 right-0 w-16 h-16 bg-primary-500/5 rounded-full blur-xl group-hover:bg-primary-500/10 transition-all duration-300"></div>
+              <div className="flex justify-between items-start">
+                <div>
+                  <span className="text-[10px] text-gray-400 uppercase tracking-wider block font-bold">Total Orders</span>
+                  <span className="text-3xl font-black text-white mt-1 block">{totalOrders}</span>
+                </div>
+                <div className="p-2.5 bg-primary-500/10 text-primary-500 rounded-lg shrink-0"><TrendingUp size={18} /></div>
+              </div>
+              <span className="text-[10px] text-gray-400 font-medium mt-4">Overall orders record</span>
+            </div>
+
+            {/* Trust Score block - span 4 (if defined) */}
+            {user?.trustScore !== undefined && (
+              <div className="responsive-card bento-col-4 p-6 flex flex-col justify-between min-h-[140px] relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-500/5 rounded-full blur-xl group-hover:bg-emerald-500/10 transition-all duration-300"></div>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <span className="text-[10px] text-gray-400 uppercase tracking-wider block font-bold">Trust Rating</span>
+                    <div className="mt-2">
+                      <TrustScore score={user.trustScore} showIcon={true} />
+                    </div>
+                  </div>
+                </div>
+                <span className="text-[10px] text-gray-400 font-medium mt-4">Based on buyer completions</span>
+              </div>
+            )}
+          </div>
 
       {/* ── Kitchen Announcements Board ────────────────────────────────── */}
-      <div className="glass-panel rounded-2xl border border-white/10 overflow-hidden shadow-xl my-4">
+      <div className="responsive-card overflow-hidden shadow-xl my-4">
         <button
           onClick={() => setIsAnnouncementsOpen(!isAnnouncementsOpen)}
           className="w-full flex items-center justify-between p-4 bg-white/3 hover:bg-white/5 transition text-left cursor-pointer"
@@ -747,7 +780,7 @@ export const SellerDashboard = () => {
         </button>
 
         {isAnnouncementsOpen && (
-          <div className="p-4 space-y-4 border-t border-white/5 bg-[#0f111c]/30">
+          <div className="p-4 space-y-4 border-t border-white/5 bg-[#060709]/30">
             {/* Create Announcement Form */}
             <form onSubmit={handlePostAnnouncement} className="flex gap-2">
               <textarea
@@ -771,7 +804,7 @@ export const SellerDashboard = () => {
             {announcements.length > 0 ? (
               <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                 {announcements.map((ann) => (
-                  <div key={ann.id} className="flex justify-between items-start gap-4 p-3 bg-white/5 border border-white/5 rounded-xl text-xs animate-slide-up">
+                  <div key={ann.id} className="flex justify-between items-start gap-4 p-3 responsive-card text-xs animate-slide-up">
                     <div className="space-y-1">
                       <p className="text-gray-200 leading-relaxed font-medium">{ann.message}</p>
                       <span className="text-[9px] text-gray-500 block">
@@ -803,7 +836,7 @@ export const SellerDashboard = () => {
             Incoming Orders ({pendingOrders.length})
           </h2>
           {pendingOrders.map(order => (
-            <div key={order.id} className="glass-panel p-4 rounded-xl border border-amber-500/15 flex flex-col md:flex-row justify-between gap-3">
+            <div key={order.id} className="responsive-card p-4 flex flex-col md:flex-row justify-between gap-3">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <h3 className="font-bold text-white">{order.foodName}</h3>
@@ -902,7 +935,7 @@ export const SellerDashboard = () => {
             <RefreshCw size={28} className="text-primary-500 animate-spin" />
           </div>
         ) : (listingsTab === 'active' ? activeFoods : pastFoods).length === 0 ? (
-          <div className="glass-panel p-12 rounded-2xl border border-white/5 text-center">
+          <div className="responsive-card p-12 text-center">
             <ChefHat size={40} className="text-gray-600 mx-auto mb-3" />
             <p className="text-gray-400 text-sm">
               {listingsTab === 'active' 
@@ -913,7 +946,7 @@ export const SellerDashboard = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {(listingsTab === 'active' ? activeFoods : pastFoods).map(food => (
-              <div key={food.id} className="glass-panel rounded-xl border border-white/10 overflow-hidden flex flex-col">
+              <div key={food.id} className="responsive-card overflow-hidden flex flex-col">
                 {food.imageUrl ? (
                   <img src={food.imageUrl} alt={food.foodName} className="w-full h-36 object-cover" />
                 ) : (
@@ -989,7 +1022,7 @@ export const SellerDashboard = () => {
           />
 
           {/* Modal Card */}
-          <div className="relative w-full max-w-lg bg-[#0f111c]/90 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-2 shadow-2xl max-h-[90vh] overflow-y-auto neon-glow-primary animate-scale-in">
+          <div className="relative w-full max-w-lg responsive-card p-2 shadow-2xl max-h-[90vh] overflow-y-auto neon-glow-primary animate-scale-in">
 
             {/* Modal header */}
             <div className="sticky top-0 z-10 flex items-center justify-between px-6 pt-5 pb-3 bg-transparent backdrop-blur-sm">
@@ -1071,98 +1104,96 @@ export const SellerDashboard = () => {
                 </div>
               </div>
 
-              {/* ── Category & Expiry ────────────────────────────────── */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5 text-left">
-                  <label className="text-xs font-bold uppercase text-gray-400 ml-1">Category</label>
-                  <div className="relative glass-input-pill rounded-full overflow-hidden flex items-center">
-                    <Tag className="absolute left-5 text-gray-500" size={18} />
-                    <select
-                      value={category}
-                      onChange={(e) => setCategory(e.target.value)}
-                      className="w-full bg-transparent border-none py-3 pl-12 pr-8 text-white focus:outline-none text-sm focus:ring-0 appearance-none cursor-pointer"
-                    >
-                      <option value="Breakfast" className="bg-[#0f111c]">Breakfast</option>
-                      <option value="Lunch" className="bg-[#0f111c]">Lunch</option>
-                      <option value="Dinner" className="bg-[#0f111c]">Dinner</option>
-                      <option value="Snacks" className="bg-[#0f111c]">Snacks</option>
-                    </select>
-                    <ChevronDown className="absolute right-4 text-gray-500 pointer-events-none" size={16} />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5 text-left">
-                  <label className="text-xs font-bold uppercase text-gray-400 ml-1">Available For</label>
-                  <div className="relative glass-input-pill rounded-full overflow-hidden flex items-center">
-                    <Clock className="absolute left-5 text-gray-500" size={18} />
-                    <select
-                      value={expiryHours}
-                      onChange={(e) => setExpiryHours(e.target.value)}
-                      className="w-full bg-transparent border-none py-3 pl-12 pr-8 text-white focus:outline-none text-sm focus:ring-0 appearance-none cursor-pointer"
-                    >
-                      <option value="1" className="bg-[#0f111c]">1 Hour</option>
-                      <option value="2" className="bg-[#0f111c]">2 Hours</option>
-                      <option value="4" className="bg-[#0f111c]">4 Hours</option>
-                      <option value="6" className="bg-[#0f111c]">6 Hours</option>
-                      <option value="12" className="bg-[#0f111c]">12 Hours</option>
-                    </select>
-                    <ChevronDown className="absolute right-4 text-gray-500 pointer-events-none" size={16} />
-                  </div>
+              {/* ── Category ────────────────────────────────────────── */}
+              <div className="space-y-1.5 text-left">
+                <label className="text-xs font-bold uppercase text-gray-400 ml-1">Category</label>
+                <div className="relative glass-input-pill rounded-full overflow-hidden flex items-center">
+                  <Tag className="absolute left-5 text-gray-500" size={18} />
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="w-full bg-transparent border-none py-3 pl-12 pr-8 text-white focus:outline-none text-sm focus:ring-0 appearance-none cursor-pointer"
+                  >
+                    <option value="Breakfast" className="bg-[#060709]">Breakfast</option>
+                    <option value="Lunch" className="bg-[#060709]">Lunch</option>
+                    <option value="Dinner" className="bg-[#060709]">Dinner</option>
+                    <option value="Snacks" className="bg-[#060709]">Snacks</option>
+                  </select>
+                  <ChevronDown className="absolute right-4 text-gray-500 pointer-events-none" size={16} />
                 </div>
               </div>
 
-              {/* ── Price & Quantity ─────────────────────────────────── */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5 text-left">
-                  <div className="flex justify-between items-center px-1">
-                    <label className="text-xs font-bold uppercase text-gray-400">
-                      Price (₹) <span className="text-rose-500">*</span>
-                    </label>
-                    {priceRecommendation && (
-                      <button
-                        type="button"
-                        onClick={() => setPrice(String(priceRecommendation))}
-                        className="text-[10px] text-primary-500 font-semibold hover:text-primary-400 transition cursor-pointer"
-                      >
-                        Use ₹{priceRecommendation}
-                      </button>
-                    )}
-                  </div>
-                  <div className="relative glass-input-pill rounded-full overflow-hidden flex items-center">
-                    <IndianRupee className="absolute left-5 text-gray-500" size={18} />
-                    <input
-                      type="number"
-                      required
-                      min="0"
-                      step="1"
-                      placeholder="0 = free donation"
-                      value={price}
-                      onChange={(e) => setPrice(e.target.value)}
-                      className="w-full bg-transparent border-none py-3 pl-12 pr-5 text-white placeholder-gray-600 focus:outline-none text-sm focus:ring-0"
-                    />
-                  </div>
-                  {price === '0' && (
-                    <p className="text-[10px] text-secondary-500 font-bold ml-1 animate-pulse">🎁 Listed as free donation</p>
+              {/* ── Available For ────────────────────────────────────── */}
+              <div className="space-y-1.5 text-left">
+                <label className="text-xs font-bold uppercase text-gray-400 ml-1">Available For</label>
+                <div className="relative glass-input-pill rounded-full overflow-hidden flex items-center">
+                  <Clock className="absolute left-5 text-gray-500" size={18} />
+                  <select
+                    value={expiryHours}
+                    onChange={(e) => setExpiryHours(e.target.value)}
+                    className="w-full bg-transparent border-none py-3 pl-12 pr-8 text-white focus:outline-none text-sm focus:ring-0 appearance-none cursor-pointer"
+                  >
+                    <option value="1" className="bg-[#060709]">1 Hour</option>
+                    <option value="2" className="bg-[#060709]">2 Hours</option>
+                    <option value="4" className="bg-[#060709]">4 Hours</option>
+                    <option value="6" className="bg-[#060709]">6 Hours</option>
+                    <option value="12" className="bg-[#060709]">12 Hours</option>
+                  </select>
+                  <ChevronDown className="absolute right-4 text-gray-500 pointer-events-none" size={16} />
+                </div>
+              </div>
+
+              {/* ── Price ────────────────────────────────────────────── */}
+              <div className="space-y-1.5 text-left">
+                <div className="flex justify-between items-center px-1">
+                  <label className="text-xs font-bold uppercase text-gray-400">
+                    Price (₹) <span className="text-rose-500">*</span>
+                  </label>
+                  {priceRecommendation && (
+                    <button
+                      type="button"
+                      onClick={() => setPrice(String(priceRecommendation))}
+                      className="text-[10px] text-primary-500 font-semibold hover:text-primary-400 transition cursor-pointer"
+                    >
+                      Use ₹{priceRecommendation}
+                    </button>
                   )}
                 </div>
+                <div className="relative glass-input-pill rounded-full overflow-hidden flex items-center">
+                  <IndianRupee className="absolute left-5 text-gray-500" size={18} />
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    step="1"
+                    placeholder="0 = free donation"
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    className="w-full bg-transparent border-none py-3 pl-12 pr-5 text-white placeholder-gray-600 focus:outline-none text-sm focus:ring-0"
+                  />
+                </div>
+                {price === '0' && (
+                  <p className="text-[10px] text-secondary-500 font-bold ml-1 animate-pulse">🎁 Listed as free donation</p>
+                )}
+              </div>
 
-                <div className="space-y-1.5 text-left">
-                  <label className="text-xs font-bold uppercase text-gray-400 ml-1">
-                    Quantity (plates) <span className="text-rose-500">*</span>
-                  </label>
-                  <div className="relative glass-input-pill rounded-full overflow-hidden flex items-center">
-                    <ShoppingBag className="absolute left-5 text-gray-500" size={18} />
-                    <input
-                      type="number"
-                      required
-                      min="1"
-                      step="1"
-                      placeholder="e.g. 5"
-                      value={quantity}
-                      onChange={(e) => setQuantity(e.target.value)}
-                      className="w-full bg-transparent border-none py-3 pl-12 pr-5 text-white placeholder-gray-600 focus:outline-none text-sm focus:ring-0"
-                    />
-                  </div>
+              {/* ── Quantity ─────────────────────────────────────────── */}
+              <div className="space-y-1.5 text-left">
+                <label className="text-xs font-bold uppercase text-gray-400 ml-1">
+                  Quantity (plates) <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative glass-input-pill rounded-full overflow-hidden flex items-center">
+                  <ShoppingBag className="absolute left-5 text-gray-500" size={18} />
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    step="1"
+                    placeholder="e.g. 5"
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
+                    className="w-full bg-transparent border-none py-3 pl-12 pr-5 text-white placeholder-gray-600 focus:outline-none text-sm focus:ring-0"
+                  />
                 </div>
               </div>
 

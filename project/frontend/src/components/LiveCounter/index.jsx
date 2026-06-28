@@ -1,4 +1,3 @@
-import React from 'react';
 import useLiveInventory from '../../hooks/useLiveInventory';
 import { Layers } from 'lucide-react';
 

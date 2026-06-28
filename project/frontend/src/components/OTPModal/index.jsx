@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { X, CheckCircle2, ShieldCheck, RefreshCw } from 'lucide-react';
 import { verifyOrderPickup } from '../../firebase/firestore';
 import confetti from 'canvas-confetti';

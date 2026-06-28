@@ -1,16 +1,23 @@
-import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from 'react-leaflet';
+import { useEffect, useState, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline, Circle } from 'react-leaflet';
 import L from 'leaflet';
 import { Link } from 'react-router-dom';
 
 // Custom Map center and bounds controller
 const MapController = ({ center, routeCoords }) => {
   const map = useMap();
+  const prevCenterRef = useRef(null);
+
   useEffect(() => {
     if (routeCoords && routeCoords.length > 0) {
       map.fitBounds(routeCoords, { padding: [40, 40] });
     } else if (center) {
-      map.setView(center, map.getZoom());
+      const [lat, lng] = center;
+      const prev = prevCenterRef.current;
+      if (!prev || prev[0] !== lat || prev[1] !== lng) {
+        map.setView(center, map.getZoom());
+        prevCenterRef.current = center;
+      }
     }
   }, [center, routeCoords, map]);
   return null;
@@ -32,7 +39,7 @@ const createSvgIcon = (color, svgContent) => {
 };
 
 // SVG templates & Legend definitions
-export const LEGEND_ITEMS = [
+const LEGEND_ITEMS = [
   {
     name: 'Veg Only',
     color: '#10b981',
@@ -227,7 +234,8 @@ export const MapView = ({
   centerCoords = null,
   routeCoords = null,
   height = '400px',
-  showLegend = null
+  showLegend = null,
+  radius = null
 }) => {
   const defaultCenter = [19.0760, 72.8777];
 
@@ -238,10 +246,10 @@ export const MapView = ({
     return !isNaN(lat) && !isNaN(lng);
   };
 
-  const mapCenter = isValidCoords(buyerCoords)
-    ? [parseFloat(buyerCoords.latitude), parseFloat(buyerCoords.longitude)]
-    : isValidCoords(centerCoords)
-      ? [parseFloat(centerCoords.latitude), parseFloat(centerCoords.longitude)]
+  const mapCenter = isValidCoords(centerCoords)
+    ? [parseFloat(centerCoords.latitude), parseFloat(centerCoords.longitude)]
+    : isValidCoords(buyerCoords)
+      ? [parseFloat(buyerCoords.latitude), parseFloat(buyerCoords.longitude)]
       : defaultCenter;
 
   const displayLegend = showLegend !== null ? showLegend : (foods.length > 0 && parseInt(height) >= 300);
@@ -281,10 +289,25 @@ export const MapView = ({
             <Popup>
               <div className="text-xs p-1">
                 <p className="font-bold text-blue-400">You Are Here</p>
-                <p className="text-gray-400 mt-0.5">Mock Location Coordinates: {parseFloat(buyerCoords.latitude).toFixed(4)}, {parseFloat(buyerCoords.longitude).toFixed(4)}</p>
+                <p className="text-gray-400 mt-0.5">Coordinates: {parseFloat(buyerCoords.latitude).toFixed(4)}, {parseFloat(buyerCoords.longitude).toFixed(4)}</p>
               </div>
             </Popup>
           </Marker>
+        )}
+
+        {/* Render Search Radius Circle around Buyer */}
+        {isValidCoords(buyerCoords) && radius && radius > 0 && (
+          <Circle
+            center={[parseFloat(buyerCoords.latitude), parseFloat(buyerCoords.longitude)]}
+            radius={radius * 1000}
+            pathOptions={{
+              color: '#3b82f6',
+              fillColor: '#3b82f6',
+              fillOpacity: 0.15,
+              weight: 1.5,
+              opacity: 0.4
+            }}
+          />
         )}
 
         {/* Render Food Sellers Markers */}

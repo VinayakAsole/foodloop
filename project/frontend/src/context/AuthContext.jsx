@@ -1,4 +1,5 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+/* eslint-disable react-refresh/only-export-components */
+import { createContext, useState, useEffect, useContext } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { 
@@ -163,4 +164,3 @@ export const useAuthContext = () => {
   const context = useContext(AuthContext);
   return context || { user: null, loading: false, login: async () => {}, register: async () => {}, logout: async () => {} };
 };
-export default AuthContext;

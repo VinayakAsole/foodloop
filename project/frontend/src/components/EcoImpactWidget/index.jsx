@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Leaf, 
   Award, 
@@ -15,7 +15,6 @@ import {
   CheckCircle2,
   Calendar,
   Gift,
-  QrCode,
   Users
 } from 'lucide-react';
 import { getBuyerOrders, getGlobalCompletedPlatesCount } from '../../firebase/firestore';
