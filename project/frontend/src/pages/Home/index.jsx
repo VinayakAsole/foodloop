@@ -379,9 +379,9 @@ export const Home = () => {
   const filteredFoods = useMemo(() => {
     let result = [...foods];
 
-    // 0. Expiry/Validation check (Filters out expired meals from the view and Leaflet map markers in real-time)
+    // 0. Expiry/Validation check (Filters out expired meals and sold out kitchens from the view and Leaflet map markers in real-time)
     const now = new Date(currentTime);
-    result = result.filter(f => new Date(f.expiryTime) > now);
+    result = result.filter(f => new Date(f.expiryTime) > now && f.kitchenStatus !== 'sold_out');
 
     // 1. Search term filter
     if (searchTerm) {

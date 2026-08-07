@@ -23,6 +23,7 @@ import { db } from '../../firebase/config';
 import { fetchIPLocation } from '../../utils/geolocationFallback';
 import { subscribeToChat } from '../../firebase/rtdb';
 import ChatDrawer from '../../components/ChatDrawer';
+import { analyzeMealImage } from '../../utils/mealAiDetector';
 
 import { 
   Plus, 
@@ -137,6 +138,7 @@ export const SellerDashboard = () => {
   // ── AI hint (non-blocking, purely cosmetic) ──────────────────────────
   const [aiLoading, setAiLoading]           = useState(false);
   const [aiMessage, setAiMessage]           = useState(null);
+  const [aiResult, setAiResult]             = useState(null);
   const [priceRecommendation, setPriceRecommendation] = useState(null);
 
   // ── Submission state ─────────────────────────────────────────────────
@@ -375,6 +377,7 @@ export const SellerDashboard = () => {
     setFoodImage(null);
     setImagePreview(null);
     setAiMessage(null);
+    setAiResult(null);
     setAiLoading(false);
     setPriceRecommendation(null);
     setSubmitError(null);
@@ -389,17 +392,14 @@ export const SellerDashboard = () => {
 
   useEffect(() => {
     if (searchParams.get('add') === 'true') {
-      const timer = setTimeout(() => {
-        openForm();
-      }, 0);
+      openForm();
       const newParams = new URLSearchParams(searchParams);
       newParams.delete('add');
       setSearchParams(newParams, { replace: true });
-      return () => clearTimeout(timer);
     }
   }, [searchParams, openForm, setSearchParams]);
 
-  // ─── Image picker — resize + quick AI hint ───────────────────────────
+  // ─── Image picker — resize + AI Vision Detector ─────────────────────────
   const handleImageChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -417,13 +417,14 @@ export const SellerDashboard = () => {
 
     setSubmitError(null);
     setAiLoading(true);
-    setAiMessage('Analyzing image...');
+    setAiMessage('Analyzing photo with AI Vision...');
+    setAiResult(null);
 
     // Show preview immediately
     const preview = URL.createObjectURL(file);
     setImagePreview(preview);
     
-    // Compress and resize the image immediately in the background so there is zero delay on submission
+    // Compress and resize the image immediately in the background
     try {
       resizeImage(file, 450).then(compressedFile => {
         setFoodImage(compressedFile);
@@ -434,23 +435,35 @@ export const SellerDashboard = () => {
       setFoodImage(file);
     }
 
-    // Non-blocking AI hint via filename / color heuristic
-    setTimeout(() => {
-      try {
-        const name = file.name.toLowerCase();
-        let hint = '';
-        if (name.includes('biryani') || name.includes('rice'))   hint = 'Looks like Biryani / Rice dish';
-        else if (name.includes('dosa') || name.includes('idli')) hint = 'Looks like Dosa / Idli';
-        else if (name.includes('roti') || name.includes('paratha')) hint = 'Looks like Roti / Paratha';
-        else if (name.includes('poha') || name.includes('upma')) hint = 'Looks like Poha / Upma';
-        else if (name.includes('sabzi') || name.includes('curry')) hint = 'Looks like a Curry dish';
-        else hint = 'Food detected ✓';
+    // Execute AI Meal Detector
+    try {
+      const detection = await analyzeMealImage(file, file.name);
+      setAiResult(detection);
 
-        setAiMessage(`${hint} — fill in details below.`);
-        setPriceRecommendation(CATEGORY_PRICES[category] || 50);
-      } catch { /* ignore */ }
+      if (!detection.isFood) {
+        setSubmitError(detection.rejectionReason);
+        setAiMessage(`🛑 Rejected: ${detection.rejectionReason}`);
+      } else {
+        setSubmitError(null);
+        setAiMessage(`✨ AI Verified: ${detection.detectedMeal} (${Math.round(detection.confidence * 100)}% match)`);
+        
+        // Auto-fill form fields if currently empty
+        if (!foodName.trim() && detection.detectedMeal) {
+          setFoodName(detection.detectedMeal);
+        }
+        if (detection.suggestedCategory && ['Breakfast', 'Lunch', 'Dinner', 'Snacks'].includes(detection.suggestedCategory)) {
+          setCategory(detection.suggestedCategory);
+        }
+        if (!description.trim() && detection.description) {
+          setDescription(detection.description);
+        }
+        setPriceRecommendation(CATEGORY_PRICES[detection.suggestedCategory || category] || 50);
+      }
+    } catch (err) {
+      console.error("AI Meal detection failed:", err);
+    } finally {
       setAiLoading(false);
-    }, 500);
+    }
   };
 
   // ─── Debounced price suggestion on category change ────────────────────
@@ -486,6 +499,12 @@ export const SellerDashboard = () => {
     if (!nameClean)           { setSubmitError('Please enter a meal name.');        return; }
     if (!quantity || isNaN(qtyNum) || qtyNum < 1) { setSubmitError('Quantity must be at least 1.'); return; }
     if (price === '' || isNaN(priceNum) || priceNum < 0) { setSubmitError('Enter a valid price (0 for free/donation).'); return; }
+
+    // Strict AI Image Guard: Reject non-food photo uploads
+    if (foodImage && aiResult && !aiResult.isFood) {
+      setSubmitError(aiResult.rejectionReason || 'The uploaded photo was flagged as a non-food image. Please upload a clear photo of a cooked meal.');
+      return;
+    }
 
     // Location — use the locked kitchen coordinates of the seller
     const lat = parseFloat(user?.latitude || 19.0760);
@@ -620,13 +639,6 @@ export const SellerDashboard = () => {
             currentStatus={kitchenStatus}
             onChange={setKitchenStatus}
           />
-          <button
-            onClick={openForm}
-            className="hidden md:flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-500 hover:to-primary-700 text-white font-bold rounded-xl transition shadow-lg shadow-primary-500/20 text-sm"
-          >
-            <Plus size={16} />
-            Add Meal
-          </button>
           <button
             onClick={loadSellerData}
             disabled={loading}
@@ -935,11 +947,11 @@ export const SellerDashboard = () => {
             <RefreshCw size={28} className="text-primary-500 animate-spin" />
           </div>
         ) : (listingsTab === 'active' ? activeFoods : pastFoods).length === 0 ? (
-          <div className="responsive-card p-12 text-center">
-            <ChefHat size={40} className="text-gray-600 mx-auto mb-3" />
-            <p className="text-gray-400 text-sm">
+          <div className="responsive-card p-12 text-center flex flex-col items-center justify-center space-y-3">
+            <ChefHat size={40} className="text-gray-600 mx-auto" />
+            <p className="text-gray-400 text-sm max-w-sm">
               {listingsTab === 'active' 
-                ? 'No active listings currently. Click Add Meal to publish a new one.' 
+                ? 'No active listings currently.' 
                 : 'No expired or sold out listings in history.'}
             </p>
           </div>
@@ -1075,7 +1087,20 @@ export const SellerDashboard = () => {
                         <span>Analyzing with AI Vision...</span>
                       </div>
                     )}
-                    {aiMessage && !aiLoading && (
+                    {aiResult && !aiLoading && (
+                      aiResult.isFood ? (
+                        <div className="px-2.5 py-1.5 bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 rounded-xl flex items-center gap-1.5 mt-1 max-w-max">
+                          <CheckCircle2 size={12} className="shrink-0 text-emerald-400" />
+                          <span className="font-bold text-[10px]">✨ AI Verified Meal: {aiResult.detectedMeal} ({Math.round(aiResult.confidence * 100)}%)</span>
+                        </div>
+                      ) : (
+                        <div className="px-2.5 py-1.5 bg-rose-500/10 border border-rose-500/25 text-rose-400 rounded-xl flex items-start gap-1.5 mt-1">
+                          <AlertCircle size={12} className="shrink-0 mt-0.5" />
+                          <span className="font-bold text-[10px]">🛑 Photo Rejected: Not a food item</span>
+                        </div>
+                      )
+                    )}
+                    {aiMessage && !aiResult && !aiLoading && (
                       <div className="px-2.5 py-1.5 bg-secondary-500/10 border border-secondary-500/20 text-secondary-500 rounded-xl flex items-center gap-1.5 mt-1 max-w-max">
                         <Sparkles size={11} className="shrink-0" />
                         <span className="font-semibold text-[10px]">{aiMessage}</span>

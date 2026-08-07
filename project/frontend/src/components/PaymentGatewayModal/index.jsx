@@ -8,8 +8,12 @@ import {
   CheckCircle2, 
   AlertTriangle,
   ArrowRight,
-  Receipt
+  Receipt,
+  Copy,
+  ExternalLink,
+  Check
 } from 'lucide-react';
+import QRCodeSvg from '../QRCodeSvg';
 
 export const PaymentGatewayModal = ({ 
   isOpen, 
@@ -17,6 +21,9 @@ export const PaymentGatewayModal = ({
   amount, 
   itemName, 
   quantity, 
+  payeeUpi = 'foodloop.escrow@upi',
+  payeeName = 'FoodLoop Escrow',
+  customQrImage = null,
   onPaymentSuccess, 
   onPaymentError 
 }) => {
@@ -24,6 +31,7 @@ export const PaymentGatewayModal = ({
   const [paymentMethod, setPaymentMethod] = useState('upi'); // 'upi' | 'card' | 'netbanking'
   const [upiMethod, setUpiMethod] = useState('qr'); // 'qr' | 'vpa'
   const [vpaAddress, setVpaAddress] = useState('');
+  const [copiedUpi, setCopiedUpi] = useState(false);
   
   // Card states
   const [cardNumber, setCardNumber] = useState('');
@@ -35,6 +43,15 @@ export const PaymentGatewayModal = ({
   const [status, setStatus] = useState('idle'); // 'idle' | 'processing' | 'success' | 'failed'
   const [loadingText, setLoadingText] = useState('Securing gateway connection...');
   const [errorMessage, setErrorMessage] = useState('');
+
+  // Construct UPI Deep Link Payload
+  const upiPayload = `upi://pay?pa=${encodeURIComponent(payeeUpi)}&pn=${encodeURIComponent(payeeName)}&am=${encodeURIComponent(amount)}&tn=${encodeURIComponent(`FoodLoop-${itemName.replace(/\s+/g, '')}-${txnRefId}`)}`;
+
+  const handleCopyUpiString = () => {
+    navigator.clipboard.writeText(payeeUpi);
+    setCopiedUpi(true);
+    setTimeout(() => setCopiedUpi(false), 2000);
+  };
 
   useEffect(() => {
     if (status === 'processing') {
@@ -273,7 +290,7 @@ export const PaymentGatewayModal = ({
                       upiMethod === 'qr' ? 'border-[#00F5FF] text-white' : 'border-transparent text-gray-500'
                     }`}
                   >
-                    Scan QR Code
+                    Scan / Pay QR Code
                   </button>
                   <button
                     type="button"
@@ -288,16 +305,44 @@ export const PaymentGatewayModal = ({
 
                 {upiMethod === 'qr' ? (
                   <div className="flex flex-col items-center justify-center py-2 space-y-3">
-                    <div className="relative p-3 bg-white rounded-2xl border-4 border-[#00F5FF]/30 shadow-lg shadow-[#00F5FF]/5 animate-pulse">
-                      {/* Fake QR code SVG */}
-                      <svg width="120" height="120" viewBox="0 0 24 24" className="text-slate-900 fill-current">
-                        <path d="M3 3h6v6H3zm2 2v2h2V5zm8-2h6v6h-6zm2 2v2h2V5zM3 15h6v6H3zm2 2v2h2v-2zm13-2h2v2h-2zm-3 2h2v2h-2zm3 2h2v2h-2zm-3 2h2v2h-2zm-4-4h2v2h-2zm2-2h2v2h-2zm-2-2h2v2h-2zm8 0h2v2h-2z" />
-                      </svg>
-                      {/* Holographic scanner line overlay */}
+                    <div className="relative p-3 bg-white rounded-2xl border-4 border-[#00F5FF]/40 shadow-lg shadow-[#00F5FF]/10">
+                      {customQrImage ? (
+                        <img src={customQrImage} alt="Payment QR" className="w-[160px] h-[160px] object-contain rounded-xl" />
+                      ) : (
+                        <QRCodeSvg 
+                          value={upiPayload} 
+                          size={160} 
+                          fgColor="#090a0f" 
+                          bgColor="#ffffff" 
+                        />
+                      )}
                       <div className="absolute left-0 right-0 h-0.5 bg-cyan-400 top-1/2 animate-bounce shadow-[0_0_8px_#22d3ee]"></div>
                     </div>
+                    
+                    <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-xl border border-white/10 text-xs">
+                      <span className="text-gray-400 font-mono">UPI: {payeeUpi}</span>
+                      <button
+                        type="button"
+                        onClick={handleCopyUpiString}
+                        className="text-[#00F5FF] hover:text-cyan-300 transition cursor-pointer p-1"
+                        title="Copy UPI Address"
+                      >
+                        {copiedUpi ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                      </button>
+                    </div>
+
+                    <a
+                      href={upiPayload}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2 bg-[#00F5FF]/10 hover:bg-[#00F5FF]/20 text-[#00F5FF] border border-[#00F5FF]/30 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <ExternalLink size={14} />
+                      <span>Open in GPay / PhonePe / Paytm</span>
+                    </a>
+
                     <p className="text-[10px] text-gray-400 text-center max-w-xs">
-                      Scan QR using GPay, PhonePe, Paytm, or BHIM. The system will auto-detect authorization.
+                      Scan QR or tap to open installed UPI payment apps. Escrow auto-holds funds upon completion.
                     </p>
                   </div>
                 ) : (

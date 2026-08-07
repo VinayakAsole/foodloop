@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import TrustScore from '../../components/TrustScore';
 import MapView from '../../components/MapView';
+import QRCodeSvg from '../../components/QRCodeSvg';
+import { updatePaymentSettings } from '../../firebase/auth';
 import { 
   User, 
   Mail, 
@@ -14,7 +16,11 @@ import {
   TrendingUp,
   RefreshCw,
   Lock,
-  X
+  X,
+  QrCode,
+  Save,
+  Check,
+  Upload
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getSellerOrders, recalculateSellerEarnings } from '../../firebase/firestore';
@@ -240,6 +246,18 @@ export const Profile = () => {
                   </div>
                 </div>
 
+                {/* Payment & UPI Settings Section */}
+                <div className="border-t border-white/5 pt-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                      <QrCode size={14} className="text-[#00F5FF]" />
+                      Payment &amp; UPI QR Settings
+                    </span>
+                  </div>
+                  
+                  <PaymentSettingsForm user={user} />
+                </div>
+
                 {/* Location locking / Relocation section for Sellers */}
                 {user.role === 'seller' && (
                   <div className="border-t border-white/5 pt-4 space-y-3">
@@ -459,4 +477,127 @@ export const Profile = () => {
   );
 };
 
+const PaymentSettingsForm = ({ user }) => {
+  const [upiVpa, setUpiVpa] = useState(user?.upiVpa || '');
+  const [customQrUrl, setCustomQrUrl] = useState(user?.customQrUrl || '');
+  const [saving, setSaving] = useState(false);
+  const [savedSuccess, setSavedSuccess] = useState(false);
+
+  const handleSavePaymentSettings = async (e) => {
+    e.preventDefault();
+    if (!upiVpa.trim() || !upiVpa.includes('@')) {
+      alert("Please enter a valid UPI VPA ID (e.g. yourname@upi)");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await updatePaymentSettings(user.uid, upiVpa, customQrUrl);
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 2500);
+    } catch (err) {
+      console.error("Failed to save payment settings:", err);
+      alert("Error saving settings: " + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleQrUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        alert("Image size should be under 2MB.");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setCustomQrUrl(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const previewPayload = `upi://pay?pa=${encodeURIComponent(upiVpa.trim() || 'user@upi')}&pn=${encodeURIComponent(user?.name || 'FoodLoop User')}&am=100&tn=FoodLoopPayment`;
+
+  return (
+    <form onSubmit={handleSavePaymentSettings} className="space-y-4 bg-white/2 border border-white/5 p-4 rounded-2xl">
+      <div className="space-y-1.5">
+        <label className="text-[10px] font-bold uppercase text-gray-400">Personal / Merchant UPI ID (VPA)</label>
+        <input
+          type="text"
+          required
+          placeholder="e.g. 9876543210@paytm, name@okhdfc"
+          value={upiVpa}
+          onChange={(e) => setUpiVpa(e.target.value)}
+          className="w-full bg-black/40 border border-white/10 focus:border-[#00F5FF] rounded-xl p-2.5 text-white placeholder-gray-600 focus:outline-none text-xs"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-[10px] font-bold uppercase text-gray-400">Custom Payment QR Code Image (Optional)</label>
+        <div className="flex items-center gap-3">
+          <input
+            type="file"
+            accept="image/*"
+            id="qr-upload"
+            onChange={handleQrUpload}
+            className="hidden"
+          />
+          <label
+            htmlFor="qr-upload"
+            className="px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-xs font-semibold rounded-xl cursor-pointer transition flex items-center gap-1.5"
+          >
+            <Upload size={14} />
+            <span>Upload Image</span>
+          </label>
+          {customQrUrl && (
+            <button
+              type="button"
+              onClick={() => setCustomQrUrl('')}
+              className="text-[10px] text-rose-400 hover:underline cursor-pointer"
+            >
+              Remove Image
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* QR Code Live Preview */}
+      <div className="pt-2 border-t border-white/5 flex flex-col items-center justify-center space-y-2">
+        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Live QR Code Preview</span>
+        <div className="p-2 bg-white rounded-xl border border-white/20 shadow-md">
+          {customQrUrl ? (
+            <img src={customQrUrl} alt="Custom QR" className="w-[120px] h-[120px] object-contain rounded-lg" />
+          ) : (
+            <QRCodeSvg value={previewPayload} size={120} fgColor="#090a0f" bgColor="#ffffff" />
+          )}
+        </div>
+        <p className="text-[9px] text-gray-500 font-mono">Payload: {upiVpa || 'user@upi'}</p>
+      </div>
+
+      <button
+        type="submit"
+        disabled={saving}
+        className="w-full py-2.5 bg-gradient-to-r from-primary-500 to-[#00F5FF] hover:from-primary-600 hover:to-cyan-500 text-slate-950 font-black rounded-xl text-xs transition flex items-center justify-center gap-2 cursor-pointer shadow-md disabled:opacity-50"
+      >
+        {saving ? (
+          <RefreshCw className="animate-spin text-slate-950" size={14} />
+        ) : savedSuccess ? (
+          <>
+            <Check size={14} className="text-slate-950" />
+            <span>Payment Settings Saved!</span>
+          </>
+        ) : (
+          <>
+            <Save size={14} />
+            <span>Save Payment Settings</span>
+          </>
+        )}
+      </button>
+    </form>
+  );
+};
+
 export default Profile;
+

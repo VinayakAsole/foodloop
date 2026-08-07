@@ -158,9 +158,23 @@ export const toggleDonation = async (foodId, isDonation) => {
 
 
 export const updateKitchenStatus = async (uid, status) => {
+  const updatedAt = new Date().toISOString();
   const userRef = doc(db, 'users', uid);
-  await updateDoc(userRef, { kitchenStatus: status });
-  await updateDoc(doc(db, 'sellers', uid), { kitchenStatus: status }).catch(() => {});
+  await updateDoc(userRef, { kitchenStatus: status, kitchenStatusUpdatedAt: updatedAt });
+  await updateDoc(doc(db, 'sellers', uid), { kitchenStatus: status, kitchenStatusUpdatedAt: updatedAt }).catch(() => {});
+
+  // Sync active food listings for this seller so buyers see real-time live status
+  try {
+    const q = query(collection(db, 'foods'), where('sellerId', '==', uid));
+    const snap = await getDocs(q);
+    const promises = [];
+    snap.forEach((foodDoc) => {
+      promises.push(updateDoc(doc(db, 'foods', foodDoc.id), { kitchenStatus: status, kitchenStatusUpdatedAt: updatedAt }));
+    });
+    await Promise.all(promises);
+  } catch (err) {
+    console.error("Failed to sync food listings kitchenStatus:", err);
+  }
 };
 
 // ==========================================

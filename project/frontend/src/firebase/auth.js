@@ -325,3 +325,17 @@ export const signInWithGoogle = async () => {
   }
   return profile;
 };
+
+/**
+ * Update user payment settings (UPI VPA & custom QR Code)
+ */
+export const updatePaymentSettings = async (uid, upiVpa, customQrUrl = null) => {
+  const userRef = doc(db, 'users', uid);
+  const updateData = {
+    upiVpa: upiVpa.trim(),
+    customQrUrl: customQrUrl ? customQrUrl.trim() : null,
+    updatedAt: new Date().toISOString()
+  };
+  await setDoc(userRef, updateData, { merge: true });
+  return updateData;
+};

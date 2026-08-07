@@ -47,6 +47,22 @@ export const FoodCard = ({ food, buyerCoords = null, onActionClick = null, actio
       )
     : null;
 
+  const getKitchenStatusStyle = (status) => {
+    switch (status) {
+      case 'cooking':
+        return { label: '👨‍🍳 Preparing', bg: 'bg-amber-500/90 border-amber-400/40 text-white' };
+      case 'busy':
+        return { label: '⚡ High Demand', bg: 'bg-cyan-400/90 border-cyan-300/40 text-slate-950' };
+      case 'sold_out':
+        return { label: '🔴 Sold Out', bg: 'bg-rose-500/90 border-rose-400/40 text-white' };
+      case 'ready':
+      default:
+        return { label: '🟢 Open / Ready', bg: 'bg-emerald-500/90 border-emerald-400/40 text-white' };
+    }
+  };
+
+  const statusStyle = getKitchenStatusStyle(food.kitchenStatus);
+
   return (
     <TiltCard className={`group glass-panel border border-white/10 hover:border-primary-500/30 rounded-2xl overflow-hidden flex flex-col h-full ${food.isDonation ? 'donation-card' : ''}`}>
       {/* Food Image */}
@@ -61,6 +77,13 @@ export const FoodCard = ({ food, buyerCoords = null, onActionClick = null, actio
         <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md text-white border border-white/10 text-xs font-semibold px-2.5 py-1 rounded-lg flex items-center space-x-1">
           <Tag size={12} className="text-primary-500" />
           <span>{food.category}</span>
+        </div>
+
+        {/* Live Kitchen Status Overlay Badge */}
+        <div className="absolute top-3 right-3">
+          <span className={`px-2 py-1 rounded-lg border text-[10px] font-black uppercase tracking-wider backdrop-blur-md shadow-md ${statusStyle.bg}`}>
+            {statusStyle.label}
+          </span>
         </div>
 
         {/* Live inventory Counter overlay */}

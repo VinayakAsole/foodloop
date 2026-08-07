@@ -160,8 +160,23 @@ const dinnerIcon = createSvgIcon('#8b5cf6', DINNER_SVG_MARKER);
 const snacksIcon = createSvgIcon('#ec4899', SNACKS_SVG_MARKER);
 const defaultFoodIcon = createSvgIcon('#2EC4B6', FOOD_SVG);
 
-// Helper function to resolve category-wise icon with Veg Only priority
+const cookingIcon = createSvgIcon('#f59e0b', `
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
+  </svg>
+`);
+
+const busyIcon = createSvgIcon('#00F5FF', `
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#090a0f" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+  </svg>
+`);
+
+// Helper function to resolve status and category-wise icon
 const getFoodIcon = (food) => {
+  if (food.kitchenStatus === 'cooking') return cookingIcon;
+  if (food.kitchenStatus === 'busy') return busyIcon;
+
   const nonVegKeywords = ['chicken', 'mutton', 'egg', 'fish', 'meat', 'prawn', 'kebab', 'keema', 'beef', 'pork'];
   const nameLower = (food.foodName || '').toLowerCase();
   const descLower = (food.description || '').toLowerCase();
@@ -313,6 +328,9 @@ export const MapView = ({
         {/* Render Food Sellers Markers */}
         {foods.map((food) => {
           if (!food.location || !isValidCoords(food.location)) return null;
+          // STRICT FILTER: Do NOT show on buyer map when kitchen is sold out!
+          if (food.kitchenStatus === 'sold_out') return null;
+
           return (
             <Marker
               key={food.id}
@@ -321,10 +339,29 @@ export const MapView = ({
             >
               <Popup>
                 <div className="text-xs min-w-[180px] p-1 text-gray-200">
-                  <span className="text-[10px] text-secondary-500 font-semibold tracking-wider uppercase bg-secondary-500/10 px-1.5 py-0.5 rounded border border-secondary-500/20">
-                    {food.category}
-                  </span>
-                  <h4 className="font-bold text-white mt-1.5 leading-tight">{food.foodName}</h4>
+                  <div className="flex items-center justify-between gap-1 mb-1">
+                    <span className="text-[10px] text-secondary-500 font-semibold tracking-wider uppercase bg-secondary-500/10 px-1.5 py-0.5 rounded border border-secondary-500/20">
+                      {food.category}
+                    </span>
+                    {/* Live Kitchen Status Overlay in Popup */}
+                    {food.kitchenStatus === 'cooking' && (
+                      <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse">
+                        👨‍🍳 Cooking Fresh
+                      </span>
+                    )}
+                    {food.kitchenStatus === 'busy' && (
+                      <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-cyan-400/20 text-cyan-300 border border-cyan-400/30">
+                        ⚡ High Demand
+                      </span>
+                    )}
+                    {(food.kitchenStatus === 'ready' || !food.kitchenStatus) && (
+                      <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                        🟢 Open / Ready
+                      </span>
+                    )}
+                  </div>
+
+                  <h4 className="font-bold text-white mt-1 leading-tight">{food.foodName}</h4>
                   
                   <p className="text-gray-400 mt-0.5 text-[10px] flex items-center gap-1">
                     🍳 {food.kitchenName || food.sellerName}

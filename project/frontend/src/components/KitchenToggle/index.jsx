@@ -1,51 +1,128 @@
-import { ChefHat } from 'lucide-react';
+import { useState } from 'react';
+import { ChefHat, Flame, Zap, CheckCircle2, XCircle, RefreshCw } from 'lucide-react';
 import { updateKitchenStatus } from '../../firebase/firestore';
+import { simulateLocalNotification } from '../../firebase/messaging';
 
-export const KitchenToggle = ({ sellerId, currentStatus = 'ready', onStatusChange }) => {
+export const KitchenToggle = ({ sellerId, currentStatus = 'ready', onChange }) => {
+  const [updating, setUpdating] = useState(false);
+  const [activeStatus, setActiveStatus] = useState(currentStatus);
+
   const statuses = [
-    { value: 'ready', label: 'Ready', color: 'bg-secondary-500', text: 'text-secondary-500', border: 'border-secondary-500/20', hover: 'hover:bg-secondary-500/10' },
-    { value: 'cooking', label: 'Cooking', color: 'bg-tertiary-500', text: 'text-tertiary-500', border: 'border-tertiary-500/20', hover: 'hover:bg-tertiary-500/10' },
-    { value: 'sold_out', label: 'Sold Out', color: 'bg-rose-500', text: 'text-rose-400', border: 'border-rose-500/20', hover: 'hover:bg-rose-500/10' }
+    { 
+      value: 'ready', 
+      label: 'Ready / Open', 
+      badge: '🟢 Open to Serve',
+      color: 'bg-emerald-500', 
+      text: 'text-emerald-400', 
+      border: 'border-emerald-500/30', 
+      bg: 'bg-emerald-500/10',
+      icon: CheckCircle2 
+    },
+    { 
+      value: 'cooking', 
+      label: 'Cooking Fresh', 
+      badge: '👨‍🍳 Preparing Meals',
+      color: 'bg-amber-500', 
+      text: 'text-amber-400', 
+      border: 'border-amber-500/30', 
+      bg: 'bg-amber-500/10',
+      icon: Flame 
+    },
+    { 
+      value: 'busy', 
+      label: 'High Demand', 
+      badge: '⚡ High Demand',
+      color: 'bg-[#00F5FF]', 
+      text: 'text-[#00F5FF]', 
+      border: 'border-[#00F5FF]/30', 
+      bg: 'bg-[#00F5FF]/10',
+      icon: Zap 
+    },
+    { 
+      value: 'sold_out', 
+      label: 'Sold Out / Closed', 
+      badge: '🔴 Sold Out Today',
+      color: 'bg-rose-500', 
+      text: 'text-rose-400', 
+      border: 'border-rose-500/30', 
+      bg: 'bg-rose-500/10',
+      icon: XCircle 
+    }
   ];
 
+  const currentObj = statuses.find(s => s.value === (activeStatus || currentStatus)) || statuses[0];
+
   const handleToggle = async (statusValue) => {
+    if (statusValue === activeStatus || updating) return;
+
+    setUpdating(true);
     try {
-      await updateKitchenStatus(sellerId, statusValue);
-      if (onStatusChange) {
-        onStatusChange(statusValue);
+      if (sellerId) {
+        await updateKitchenStatus(sellerId, statusValue);
       }
+      setActiveStatus(statusValue);
+      if (onChange) {
+        onChange(statusValue);
+      }
+
+      const updatedObj = statuses.find(s => s.value === statusValue);
+      simulateLocalNotification(
+        'Live Kitchen Status Updated',
+        `Your kitchen is now set to "${updatedObj?.label}". Nearby buyers see this status live!`,
+        'success'
+      );
     } catch (error) {
       console.error("Failed to update kitchen status:", error);
+    } finally {
+      setUpdating(false);
     }
   };
 
   return (
-    <div className="glass-panel p-4 rounded-xl flex flex-col md:flex-row items-center justify-between gap-4 border border-white/10">
-      <div className="flex items-center space-x-3">
-        <div className="p-2.5 bg-white/5 rounded-lg border border-white/10 text-primary-500">
-          <ChefHat size={20} className={currentStatus === 'cooking' ? 'animate-spin' : ''} />
+    <div className="responsive-card p-4.5 rounded-2xl flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 shadow-xl border border-white/10 relative overflow-hidden">
+      {/* Live Kitchen Background Glow */}
+      <div className={`absolute top-0 right-0 w-32 h-32 ${currentObj.bg} rounded-full blur-3xl pointer-events-none transition-all duration-500`}></div>
+
+      {/* Header & Status Indicator */}
+      <div className="flex items-center space-x-3.5">
+        <div className={`p-3 rounded-2xl border ${currentObj.border} ${currentObj.bg} ${currentObj.text} shrink-0 relative`}>
+          <ChefHat size={22} className={activeStatus === 'cooking' ? 'animate-bounce' : activeStatus === 'busy' ? 'animate-pulse' : ''} />
+          <span className={`absolute -top-1 -right-1 w-3 h-3 rounded-full ${currentObj.color} animate-ping`} />
         </div>
-        <div>
-          <h3 className="font-bold text-white">Live Kitchen Status</h3>
-          <p className="text-xs text-gray-400">Broadcast your availability instantly to nearby buyers</p>
+        <div className="space-y-0.5">
+          <div className="flex items-center gap-2">
+            <h3 className="font-extrabold text-white text-sm">Live Kitchen Status</h3>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${currentObj.bg} ${currentObj.text} ${currentObj.border}`}>
+              {currentObj.badge}
+            </span>
+          </div>
+          <p className="text-xs text-gray-400 font-medium">Broadcast your live cooking availability instantly to buyers on the map.</p>
         </div>
       </div>
 
-      <div className="flex items-center space-x-2 w-full md:w-auto">
+      {/* Toggle Buttons */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full lg:w-auto">
         {statuses.map((s) => {
-          const isSelected = currentStatus === s.value;
+          const isSelected = (activeStatus || currentStatus) === s.value;
+          const IconComp = s.icon;
           return (
             <button
               key={s.value}
+              type="button"
+              disabled={updating}
               onClick={() => handleToggle(s.value)}
-              className={`flex-1 md:flex-initial flex items-center justify-center space-x-1.5 px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all duration-200 border ${
+              className={`flex items-center justify-center space-x-1.5 px-3 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all duration-200 border cursor-pointer ${
                 isSelected
-                  ? `${s.text} bg-white/5 ${s.border} border-t-2 shadow-md shadow-black/30`
-                  : `text-gray-400 bg-transparent border-transparent ${s.hover}`
+                  ? `${s.text} ${s.bg} ${s.border} shadow-lg shadow-black/40 scale-[1.02]`
+                  : 'text-gray-400 bg-white/2 border-white/5 hover:text-white hover:bg-white/5 hover:border-white/10'
               }`}
             >
-              <span className={`w-2.5 h-2.5 rounded-full ${s.color} ${isSelected ? 'animate-pulse' : 'opacity-60'}`} />
-              <span>{s.label}</span>
+              {updating && isSelected ? (
+                <RefreshCw size={14} className="animate-spin text-white" />
+              ) : (
+                <IconComp size={14} className={isSelected ? s.text : 'text-gray-500'} />
+              )}
+              <span className="whitespace-nowrap">{s.label}</span>
             </button>
           );
         })}
