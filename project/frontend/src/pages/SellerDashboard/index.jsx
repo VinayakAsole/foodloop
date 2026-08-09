@@ -26,7 +26,6 @@ import ChatDrawer from '../../components/ChatDrawer';
 import { analyzeMealImage } from '../../utils/mealAiDetector';
 
 import { 
-  Plus, 
   TrendingUp, 
   ShoppingBag, 
   LayoutDashboard,
