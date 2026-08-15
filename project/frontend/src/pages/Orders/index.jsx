@@ -578,6 +578,19 @@ export const Orders = () => {
                                   </div>
                                 </div>
 
+                                {/* 1-Tap Direct Google Maps Navigation Button */}
+                                {order.location && (
+                                  <a
+                                    href={`https://www.google.com/maps/dir/?api=1&destination=${order.location.latitude},${order.location.longitude}&travelmode=walking`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center justify-center gap-2 w-full py-2.5 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 text-blue-400 hover:text-blue-300 rounded-xl text-xs font-bold transition active:scale-[0.98] cursor-pointer shadow-md"
+                                  >
+                                    <Navigation size={13} className="animate-bounce" />
+                                    <span>Start Live GPS Navigation (Google Maps)</span>
+                                  </a>
+                                )}
+
                                 {/* Map Widget */}
                                 <div className="rounded-xl overflow-hidden border border-white/10 shadow-inner">
                                   <MapView

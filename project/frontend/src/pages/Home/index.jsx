@@ -5,6 +5,7 @@ import { Capacitor } from '@capacitor/core';
 import { Geolocation } from '@capacitor/geolocation';
 import { fetchIPLocation } from '../../utils/geolocationFallback';
 import FoodCard from '../../components/FoodCard';
+import FoodRadar from '../../components/FoodRadar';
 import MapView from '../../components/MapView';
 import { calculateDistance, formatDistance } from '../../utils/haversine';
 import { onSnapshot, collection, query, where, doc, updateDoc } from 'firebase/firestore';
@@ -36,7 +37,24 @@ export const Home = () => {
   const [isVegOnly, setIsVegOnly] = useState(false);
   const [maxDistance, setMaxDistance] = useState(5); // default 5km radius (range 0m to 5km)
   const [sortBy, setSortBy] = useState('nearest'); // 'nearest', 'cheapest', 'highest_rated'
-  const showMap = searchParams.get('map') === 'true';
+  const currentView = searchParams.get('view') || (searchParams.get('map') === 'true' ? 'map' : 'grid');
+  const showMap = currentView === 'map';
+
+  const setViewMode = (mode) => {
+    const newParams = new URLSearchParams(searchParams);
+    if (mode === 'grid') {
+      newParams.delete('view');
+      newParams.delete('map');
+    } else if (mode === 'radar') {
+      newParams.set('view', 'radar');
+      newParams.delete('map');
+    } else if (mode === 'map') {
+      newParams.set('view', 'map');
+      newParams.set('map', 'true');
+    }
+    setSearchParams(newParams, { replace: true });
+  };
+
   const [loading, setLoading] = useState(true);
 
   // PWA Install states
@@ -548,39 +566,85 @@ export const Home = () => {
         </div>
       )}
 
-      {/* Radius Distance Slider */}
-      {!showMap && (
-        <div className="responsive-card px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center space-x-4 flex-grow">
-            <MapPin size={16} className="text-secondary-500 shrink-0" />
-            <span className="text-xs text-gray-300 whitespace-nowrap">Distance Radius: <strong className="text-white">{formatDistance(maxDistance)}</strong></span>
-            <input
-              type="range"
-              min="0"
-              max="5"
-              step="0.05"
-              value={maxDistance}
-              onChange={(e) => setMaxDistance(parseFloat(e.target.value))}
-              className="w-full accent-primary-500 h-1 bg-white/10 rounded-lg cursor-pointer"
-            />
-          </div>
-          <div className="flex items-center justify-between sm:justify-end gap-2.5 border-t sm:border-t-0 border-white/5 pt-2.5 sm:pt-0 shrink-0">
-            <span className="text-[10px] text-gray-400 font-mono">
-              📍 {activeCoords.latitude.toFixed(5)}, {activeCoords.longitude.toFixed(5)}
-            </span>
-            <button
-              onClick={() => requestGeoLocation(true)}
-              className="px-2.5 py-1 bg-white/5 hover:bg-white/10 text-[10px] font-semibold text-primary-500 hover:text-primary-400 border border-white/10 hover:border-primary-500/30 rounded-lg transition-all cursor-pointer flex items-center gap-1"
-              title="Recalculate location coordinates"
-            >
-              <RefreshCw size={10} />
-              <span>Refresh Location</span>
-            </button>
-          </div>
+      {/* View Mode Switcher & Radius Distance Controls */}
+      <div className="responsive-card px-4 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        {/* 3-Way View Switcher */}
+        <div className="flex items-center bg-white/5 border border-white/10 rounded-xl p-1 gap-1 shrink-0">
+          <button
+            onClick={() => setViewMode('grid')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+              currentView === 'grid' 
+                ? 'bg-primary-500 text-slate-950 shadow-md shadow-primary-500/20' 
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <span>🍱 Grid</span>
+          </button>
+          <button
+            onClick={() => setViewMode('radar')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+              currentView === 'radar' 
+                ? 'bg-secondary-500 text-slate-950 shadow-[0_0_15px_rgba(46,196,182,0.4)]' 
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <Compass size={13} className="animate-spin" style={{ animationDuration: '6s' }} />
+            <span>Food Radar</span>
+            <span className="text-[8px] font-black uppercase px-1 py-0.5 rounded bg-slate-950/40 text-slate-950 border border-slate-950/20">NEW</span>
+          </button>
+          <button
+            onClick={() => setViewMode('map')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+              currentView === 'map' 
+                ? 'bg-blue-500 text-white shadow-md' 
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <MapPin size={13} />
+            <span>Map</span>
+          </button>
         </div>
-      )}
-      {/* Main Content */}
-      {showMap ? (
+
+        {/* Distance Slider */}
+        <div className="flex items-center space-x-3 flex-grow min-w-[200px]">
+          <span className="text-xs text-gray-300 whitespace-nowrap">Radius: <strong className="text-white font-mono">{formatDistance(maxDistance)}</strong></span>
+          <input
+            type="range"
+            min="0.5"
+            max="15"
+            step="0.5"
+            value={maxDistance}
+            onChange={(e) => setMaxDistance(parseFloat(e.target.value))}
+            className="w-full accent-primary-500 h-1 bg-white/10 rounded-lg cursor-pointer"
+          />
+        </div>
+
+        {/* Location GPS display & Refresh */}
+        <div className="flex items-center justify-between md:justify-end gap-2 border-t md:border-t-0 border-white/5 pt-2 md:pt-0 shrink-0">
+          <span className="text-[10px] text-gray-400 font-mono">
+            📍 {activeCoords.latitude.toFixed(4)}, {activeCoords.longitude.toFixed(4)}
+          </span>
+          <button
+            onClick={() => requestGeoLocation(true)}
+            className="px-2.5 py-1 bg-white/5 hover:bg-white/10 text-[10px] font-semibold text-primary-500 hover:text-primary-400 border border-white/10 hover:border-primary-500/30 rounded-lg transition-all cursor-pointer flex items-center gap-1"
+            title="Recalculate location coordinates"
+          >
+            <RefreshCw size={10} />
+            <span>GPS</span>
+          </button>
+        </div>
+      </div>
+      {/* Main Content View */}
+      {currentView === 'radar' ? (
+        <div className="space-y-4">
+          <FoodRadar 
+            foods={filteredFoods} 
+            buyerCoords={activeCoords} 
+            maxRangeKm={maxDistance} 
+            height="580px" 
+          />
+        </div>
+      ) : currentView === 'map' ? (
         /* Exploration View: Live Food Map (Full width, split screen sidebar style) */
         <div className="flex flex-col md:flex-row h-[620px] overflow-hidden responsive-card relative neon-glow-primary bg-[#060709]/50">
           

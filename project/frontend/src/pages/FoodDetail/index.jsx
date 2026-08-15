@@ -493,16 +493,16 @@ export const FoodDetail = () => {
 
             <MapView foods={[food]} buyerCoords={userCoords} height="240px" />
 
-            {/* Open in Google Maps full link */}
+            {/* Open in Google Maps 1-Tap Turn-by-Turn Walking Directions */}
             {food?.location && (
               <a
-                href={`https://www.google.com/maps/search/?api=1&query=${food.location.latitude},${food.location.longitude}`}
+                href={`https://www.google.com/maps/dir/?api=1&destination=${food.location.latitude},${food.location.longitude}&travelmode=walking`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-center gap-1.5 w-full py-2 bg-white/5 border border-white/10 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-semibold rounded-xl transition"
+                className="flex items-center justify-center gap-2 w-full py-2.5 bg-blue-500/15 border border-blue-500/30 hover:bg-blue-500/25 text-blue-400 hover:text-blue-300 text-xs font-bold rounded-xl transition shadow-sm cursor-pointer"
               >
-                <MapPin size={12} className="text-primary-500" />
-                View on Google Maps
+                <MapPin size={14} className="text-blue-400 animate-bounce" />
+                <span>Open Turn-by-Turn Directions (Google Maps)</span>
               </a>
             )}
           </div>

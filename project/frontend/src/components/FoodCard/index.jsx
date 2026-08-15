@@ -118,9 +118,9 @@ export const FoodCard = ({ food, buyerCoords = null, onActionClick = null, actio
           </div>
 
           {distance !== null && (
-            <div className="flex items-center justify-end space-x-1.5 text-gray-300">
-              <MapPin size={14} className="text-primary-500" />
-              <span>{formatDistance(distance)} away</span>
+            <div className="flex items-center justify-end space-x-1 text-secondary-400 font-semibold">
+              <span className="text-[10px]">🚶</span>
+              <span>~{Math.max(1, Math.round((distance * 1000) / 75))} min ({formatDistance(distance)})</span>
             </div>
           )}
         </div>
