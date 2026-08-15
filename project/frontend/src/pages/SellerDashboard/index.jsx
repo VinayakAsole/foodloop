@@ -391,10 +391,12 @@ export const SellerDashboard = () => {
 
   useEffect(() => {
     if (searchParams.get('add') === 'true') {
-      openForm();
-      const newParams = new URLSearchParams(searchParams);
-      newParams.delete('add');
-      setSearchParams(newParams, { replace: true });
+      queueMicrotask(() => {
+        openForm();
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete('add');
+        setSearchParams(newParams, { replace: true });
+      });
     }
   }, [searchParams, openForm, setSearchParams]);
 

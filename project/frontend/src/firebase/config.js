@@ -23,9 +23,11 @@ const firebaseConfig = {
 };
 
 // Check if credentials are placeholders
+const currentApiKey = getEnvVar('VITE_FIREBASE_API_KEY');
 const isConfigured = 
-  getEnvVar('VITE_FIREBASE_API_KEY') && 
-  getEnvVar('VITE_FIREBASE_API_KEY') !== "your_api_key_here";
+  Boolean(currentApiKey) && 
+  currentApiKey !== "your_api_key_here" && 
+  currentApiKey !== "placeholder_api_key";
 
 if (!isConfigured) {
   console.warn(
