@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import MapView from '../../components/MapView';
 import ChatDrawer from '../../components/ChatDrawer';
 import { fetchWalkingRoute } from '../../utils/routing';
+import { fetchIPLocation } from '../../utils/geolocationFallback';
 import { onSnapshot, collection, query, where } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { subscribeToChat } from '../../firebase/rtdb';
@@ -107,12 +108,14 @@ export const Orders = () => {
       return;
     }
 
-    if (!userCoords) {
-      setRouteData(prev => ({
-        ...prev,
-        [orderId]: { ...prev[orderId], showMap: true, error: "Please update your GPS location in profile/settings to enable routing." }
-      }));
-      return;
+    let buyerStartCoords = userCoords;
+    if (!buyerStartCoords) {
+      const ipCoords = await fetchIPLocation();
+      if (ipCoords) {
+        buyerStartCoords = ipCoords;
+      } else {
+        buyerStartCoords = { latitude: 19.0760, longitude: 72.8777 };
+      }
     }
 
     if (!order.location) {
@@ -129,7 +132,7 @@ export const Orders = () => {
     }));
 
     try {
-      const res = await fetchWalkingRoute(userCoords, order.location);
+      const res = await fetchWalkingRoute(buyerStartCoords, order.location);
       setRouteData(prev => ({
         ...prev,
         [orderId]: {
@@ -143,14 +146,15 @@ export const Orders = () => {
           error: null
         }
       }));
-    } catch {
+    } catch (err) {
+      console.warn("Route computation error:", err);
       setRouteData(prev => ({
         ...prev,
         [orderId]: {
           ...prev[orderId],
           showMap: true,
           loading: false,
-          error: "Routing server is currently busy. Please try again in a moment."
+          error: "Could not generate routing path. Please check your network connection."
         }
       }));
     }

@@ -23,6 +23,21 @@ const MapController = ({ center, routeCoords }) => {
   return null;
 };
 
+// Invalidate map size after initialization to fix rendering on tab/container switches
+const InvalidateMapSize = () => {
+  const map = useMap();
+  useEffect(() => {
+    map.invalidateSize();
+    const timer1 = setTimeout(() => map.invalidateSize(), 150);
+    const timer2 = setTimeout(() => map.invalidateSize(), 500);
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+    };
+  }, [map]);
+  return null;
+};
+
 // Create custom markers using SVG icons to avoid asset path errors in Vite
 const createSvgIcon = (color, svgContent) => {
   return L.divIcon({
@@ -279,9 +294,12 @@ export const MapView = ({
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" // Gorgeous Dark Mode map layer!
+          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          subdomains="abcd"
+          maxZoom={19}
         />
 
+        <InvalidateMapSize />
         <MapController center={mapCenter} routeCoords={routeCoords} />
 
         {routeCoords && routeCoords.length > 0 && (

@@ -46,6 +46,26 @@ export const useGeolocation = (autoFetch = false) => {
       }
 
       setLoading(true);
+      
+      const tryLowAccuracyFallback = (initialErrorMsg) => {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const fetchedCoords = {
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude
+            };
+            setCoords(fetchedCoords);
+            setError(null);
+            setLoading(false);
+            resolve(fetchedCoords);
+          },
+          () => {
+            handleIPFallback(initialErrorMsg);
+          },
+          { enableHighAccuracy: false, timeout: 6000, maximumAge: 60000 }
+        );
+      };
+
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const fetchedCoords = {
@@ -63,9 +83,13 @@ export const useGeolocation = (autoFetch = false) => {
           else if (err.code === 2) errorMessage = 'Location unavailable';
           else if (err.code === 3) errorMessage = 'Location fetch timeout';
           
-          handleIPFallback(errorMessage);
+          if (err.code === 3 || err.code === 2) {
+            tryLowAccuracyFallback(errorMessage);
+          } else {
+            handleIPFallback(errorMessage);
+          }
         },
-        { enableHighAccuracy: true, timeout: 6000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 15000 }
       );
     });
   };
